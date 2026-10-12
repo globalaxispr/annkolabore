@@ -1,6 +1,6 @@
 -- ==============================================================================
 -- SISTÈM JESYON KONTRIBISYON CHOFÈ LEGLIZ (CHURCH DRIVERS CONTRIBUTION SYSTEM)
--- Full PostgreSQL Schema with RLS, Atomic Procedures, Audit Trail & Realtime
+-- PostgreSQL Schema with Scheduled Withdrawals, Atomic Procedures & Audit Trail
 -- ==============================================================================
 
 -- 1. EXTENSIONS
@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS public.contribution_submissions (
   driver_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE RESTRICT,
   work_date DATE NOT NULL,
   payment_date DATE NOT NULL,
-  amount_centavos BIGINT NOT NULL DEFAULT 1000 CHECK (amount_centavos > 0),
+  amount_centavos BIGINT NOT NULL DEFAULT 1000 CHECK (amount_centavos >= 1000), -- Minimum R$ 10,00
   payment_method TEXT NOT NULL DEFAULT 'PIX' CHECK (payment_method IN ('PIX', 'Espès', 'Transfè', 'Lòt')),
   transaction_ref TEXT,
   receipt_url TEXT,
@@ -42,7 +42,27 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_active_work_date
 ON public.contribution_submissions (driver_id, work_date)
 WHERE status != 'REJECTED';
 
--- 4. EXPENSES TABLE
+-- 4. SCHEDULED WITHDRAWALS TABLE (Dedicated Scheduled Withdrawal Workflow)
+CREATE TABLE IF NOT EXISTS public.scheduled_withdrawals (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  description TEXT NOT NULL,
+  amount_centavos BIGINT NOT NULL CHECK (amount_centavos > 0),
+  scheduled_date DATE NOT NULL,
+  scheduled_time TEXT,
+  status TEXT NOT NULL DEFAULT 'Pwograme' CHECK (status IN ('Pwograme', 'An Atant', 'Egzekite', 'Anile')),
+  created_by UUID NOT NULL REFERENCES public.profiles(id) ON DELETE RESTRICT,
+  executed_by UUID REFERENCES public.profiles(id) ON DELETE RESTRICT,
+  executed_at TIMESTAMPTZ,
+  cancelled_by UUID REFERENCES public.profiles(id) ON DELETE RESTRICT,
+  cancelled_at TIMESTAMPTZ,
+  cancellation_reason TEXT,
+  note TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 5. HISTORICAL EXPENSES PRESERVATION (Safe Backward-Compatibility Migration)
+-- Preserves existing records while routing outgoing transactions into withdrawals
 CREATE TABLE IF NOT EXISTS public.expenses (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   amount_centavos BIGINT NOT NULL CHECK (amount_centavos > 0),
@@ -55,13 +75,13 @@ CREATE TABLE IF NOT EXISTS public.expenses (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 5. OFFICIAL FINANCIAL TRANSACTIONS (LEDGER)
+-- 6. OFFICIAL FINANCIAL TRANSACTIONS (LEDGER)
 CREATE TABLE IF NOT EXISTS public.financial_transactions (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  type TEXT NOT NULL CHECK (type IN ('CONTRIBUTION', 'EXPENSE', 'REVERSAL', 'CORRECTION')),
+  type TEXT NOT NULL CHECK (type IN ('CONTRIBUTION', 'WITHDRAWAL', 'REVERSAL', 'CORRECTION')),
   amount_centavos BIGINT NOT NULL,
   submission_id UUID UNIQUE REFERENCES public.contribution_submissions(id) ON DELETE RESTRICT,
-  expense_id UUID UNIQUE REFERENCES public.expenses(id) ON DELETE RESTRICT,
+  withdrawal_id UUID UNIQUE REFERENCES public.scheduled_withdrawals(id) ON DELETE RESTRICT,
   driver_id UUID REFERENCES public.profiles(id) ON DELETE RESTRICT,
   description TEXT NOT NULL,
   recorded_by UUID NOT NULL REFERENCES public.profiles(id) ON DELETE RESTRICT,
@@ -69,7 +89,7 @@ CREATE TABLE IF NOT EXISTS public.financial_transactions (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 6. AUDIT LOGS TABLE (IMMUTABLE AUDIT TRAIL)
+-- 7. AUDIT LOGS TABLE (IMMUTABLE AUDIT TRAIL)
 CREATE TABLE IF NOT EXISTS public.audit_logs (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   action TEXT NOT NULL,
@@ -82,21 +102,34 @@ CREATE TABLE IF NOT EXISTS public.audit_logs (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 7. PUBLIC VIEW FOR TRANSPARENCY (ZERO LEAKAGE OF EMAILS/RECEIPTS)
+-- 8. PUBLIC VIEW FOR TRANSPARENCY (ZERO LEAKAGE OF EMAILS/RECEIPTS)
 CREATE OR REPLACE VIEW public.public_financial_records AS
 SELECT 
   s.id,
+  'CONTRIBUTION' AS type,
   p.full_name AS driver_name,
   s.amount_centavos,
   s.work_date,
   s.payment_date,
-  s.reviewed_at AS approval_date,
+  s.reviewed_at AS transaction_date,
   s.status
 FROM public.contribution_submissions s
 JOIN public.profiles p ON s.driver_id = p.id
-WHERE s.status = 'APPROVED';
+WHERE s.status = 'APPROVED'
+UNION ALL
+SELECT 
+  w.id,
+  'WITHDRAWAL' AS type,
+  'Retrè Fon' AS driver_name,
+  w.amount_centavos,
+  w.scheduled_date AS work_date,
+  w.scheduled_date AS payment_date,
+  w.executed_at AS transaction_date,
+  w.status
+FROM public.scheduled_withdrawals w
+WHERE w.status = 'Egzekite';
 
--- 8. ATOMIC STORED PROCEDURE: APPROVE CONTRIBUTION (IDEMPOTENT & AUDITED)
+-- 9. ATOMIC STORED PROCEDURE: APPROVE CONTRIBUTION (IDEMPOTENT & AUDITED)
 CREATE OR REPLACE FUNCTION public.approve_contribution(
   p_submission_id UUID,
   p_admin_id UUID
@@ -110,7 +143,6 @@ DECLARE
   v_admin_name TEXT;
   v_sub RECORD;
 BEGIN
-  -- Verify admin authorization
   SELECT role, full_name INTO v_admin_role, v_admin_name
   FROM public.profiles
   WHERE id = p_admin_id;
@@ -119,7 +151,6 @@ BEGIN
     RAISE EXCEPTION 'Aksyon sa a mande otorizasyon administratè oswa trezorye.';
   END IF;
 
-  -- Lock row to prevent concurrent duplicate approval
   SELECT * INTO v_sub
   FROM public.contribution_submissions
   WHERE id = p_submission_id
@@ -133,7 +164,6 @@ BEGIN
     RAISE EXCEPTION 'Kontribisyon sa a pa nan eta An Atant ankò.';
   END IF;
 
-  -- 1. Update submission status
   UPDATE public.contribution_submissions
   SET 
     status = 'APPROVED',
@@ -142,7 +172,6 @@ BEGIN
     updated_at = NOW()
   WHERE id = p_submission_id;
 
-  -- 2. Add to official financial ledger
   INSERT INTO public.financial_transactions (
     type,
     amount_centavos,
@@ -161,7 +190,6 @@ BEGIN
     v_sub.payment_date
   );
 
-  -- 3. Record in immutable audit log
   INSERT INTO public.audit_logs (
     action,
     entity_type,
@@ -184,11 +212,10 @@ BEGIN
 END;
 $$;
 
--- 9. ATOMIC STORED PROCEDURE: REJECT CONTRIBUTION
-CREATE OR REPLACE FUNCTION public.reject_contribution(
-  p_submission_id UUID,
-  p_admin_id UUID,
-  p_reason TEXT
+-- 10. ATOMIC STORED PROCEDURE: EXECUTE SCHEDULED WITHDRAWAL
+CREATE OR REPLACE FUNCTION public.execute_scheduled_withdrawal(
+  p_withdrawal_id UUID,
+  p_admin_id UUID
 )
 RETURNS BOOLEAN
 LANGUAGE plpgsql
@@ -197,41 +224,56 @@ AS $$
 DECLARE
   v_admin_role TEXT;
   v_admin_name TEXT;
-  v_sub RECORD;
+  v_wth RECORD;
 BEGIN
-  IF p_reason IS NULL OR LENGTH(TRIM(p_reason)) < 5 THEN
-    RAISE EXCEPTION 'Tanpri bay yon rezon klè pou refi a (omwen 5 karaktè).';
-  END IF;
-
   SELECT role, full_name INTO v_admin_role, v_admin_name
   FROM public.profiles
   WHERE id = p_admin_id;
 
   IF v_admin_role != 'admin' THEN
-    RAISE EXCEPTION 'Aksyon sa a mande otorizasyon administratè.';
+    RAISE EXCEPTION 'Aksyon sa a mande otorizasyon administratè oswa trezorye.';
   END IF;
 
-  SELECT * INTO v_sub
-  FROM public.contribution_submissions
-  WHERE id = p_submission_id
+  SELECT * INTO v_wth
+  FROM public.scheduled_withdrawals
+  WHERE id = p_withdrawal_id
   FOR UPDATE;
 
   IF NOT FOUND THEN
-    RAISE EXCEPTION 'Kontribisyon sa a pa jwenn nan sistèm nan.';
+    RAISE EXCEPTION 'Retrè pwograme sa a pa jwenn nan sistèm nan.';
   END IF;
 
-  IF v_sub.status != 'PENDING' THEN
-    RAISE EXCEPTION 'Kontribisyon sa a pa nan eta An Atant ankò.';
+  IF v_wth.status = 'Egzekite' THEN
+    RAISE EXCEPTION 'Retrè sa a te deja egzekite.';
   END IF;
 
-  UPDATE public.contribution_submissions
+  IF v_wth.status = 'Anile' THEN
+    RAISE EXCEPTION 'Retrè sa a te anile.';
+  END IF;
+
+  UPDATE public.scheduled_withdrawals
   SET 
-    status = 'REJECTED',
-    rejection_reason = TRIM(p_reason),
-    reviewed_by = p_admin_id,
-    reviewed_at = NOW(),
+    status = 'Egzekite',
+    executed_by = p_admin_id,
+    executed_at = NOW(),
     updated_at = NOW()
-  WHERE id = p_submission_id;
+  WHERE id = p_withdrawal_id;
+
+  INSERT INTO public.financial_transactions (
+    type,
+    amount_centavos,
+    withdrawal_id,
+    description,
+    recorded_by,
+    transaction_date
+  ) VALUES (
+    'WITHDRAWAL',
+    v_wth.amount_centavos,
+    v_wth.id,
+    'Retrè egzekite: ' || v_wth.description,
+    p_admin_id,
+    CURRENT_DATE
+  );
 
   INSERT INTO public.audit_logs (
     action,
@@ -242,20 +284,20 @@ BEGIN
     actor_role,
     details
   ) VALUES (
-    'REJECT_CONTRIBUTION',
-    'submission',
-    p_submission_id::text,
+    'EXECUTE_WITHDRAWAL',
+    'withdrawal',
+    p_withdrawal_id::text,
     p_admin_id,
     v_admin_name,
     'admin',
-    'Refize kontribisyon pou dat ' || v_sub.work_date::text || '. Rezon: ' || TRIM(p_reason)
+    'Egzekite retrè R$ ' || (v_wth.amount_centavos / 100.0)::text || ': ' || v_wth.description
   );
 
   RETURN TRUE;
 END;
 $$;
 
--- 10. RPC: GET ACCURATE FINANCIAL SUMMARY
+-- 11. RPC: GET ACCURATE FINANCIAL SUMMARY (BALANCE FIRST)
 CREATE OR REPLACE FUNCTION public.get_financial_summary()
 RETURNS JSON
 LANGUAGE plpgsql
@@ -263,7 +305,8 @@ SECURITY DEFINER
 AS $$
 DECLARE
   v_total_contrib BIGINT;
-  v_total_exp BIGINT;
+  v_total_withd BIGINT;
+  v_sched_withd BIGINT;
   v_today_contrib BIGINT;
   v_month_contrib BIGINT;
   v_members_count INT;
@@ -277,9 +320,15 @@ BEGIN
   FROM public.contribution_submissions
   WHERE status = 'APPROVED';
 
-  -- Sum expenses
-  SELECT COALESCE(SUM(amount_centavos), 0) INTO v_total_exp
-  FROM public.expenses;
+  -- Sum executed withdrawals
+  SELECT COALESCE(SUM(amount_centavos), 0) INTO v_total_withd
+  FROM public.scheduled_withdrawals
+  WHERE status = 'Egzekite';
+
+  -- Sum pending scheduled withdrawals (projection)
+  SELECT COALESCE(SUM(amount_centavos), 0) INTO v_sched_withd
+  FROM public.scheduled_withdrawals
+  WHERE status IN ('Pwograme', 'An Atant');
 
   -- Today approved
   SELECT COALESCE(SUM(amount_centavos), 0) INTO v_today_contrib
@@ -298,8 +347,10 @@ BEGIN
 
   RETURN json_build_object(
     'total_contributions_centavos', v_total_contrib,
-    'total_expenses_centavos', v_total_exp,
-    'current_balance_centavos', (v_total_contrib - v_total_exp),
+    'total_withdrawals_centavos', v_total_withd,
+    'current_balance_centavos', (v_total_contrib - v_total_withd),
+    'scheduled_withdrawals_centavos', v_sched_withd,
+    'projected_balance_centavos', ((v_total_contrib - v_total_withd) - v_sched_withd),
     'members_count', v_members_count,
     'today_contributions_centavos', v_today_contrib,
     'month_contributions_centavos', v_month_contrib
@@ -307,54 +358,22 @@ BEGIN
 END;
 $$;
 
--- 11. ROW LEVEL SECURITY (RLS) POLICIES
+-- 12. ROW LEVEL SECURITY (RLS) POLICIES
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.contribution_submissions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.expenses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.scheduled_withdrawals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.financial_transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
 
--- Profiles:
-CREATE POLICY "Public can view minimal driver names" ON public.profiles
-FOR SELECT USING (true);
+CREATE POLICY "Public can view driver profiles" ON public.profiles FOR SELECT USING (true);
+CREATE POLICY "Drivers view own submissions" ON public.contribution_submissions FOR SELECT USING (auth.uid() = driver_id OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'));
+CREATE POLICY "Drivers create submissions" ON public.contribution_submissions FOR INSERT WITH CHECK (auth.uid() = driver_id);
+CREATE POLICY "Public can view scheduled withdrawals" ON public.scheduled_withdrawals FOR SELECT USING (true);
+CREATE POLICY "Only admins can insert or update withdrawals" ON public.scheduled_withdrawals FOR ALL USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'));
+CREATE POLICY "Public can view ledger" ON public.financial_transactions FOR SELECT USING (true);
+CREATE POLICY "Only admins view audit" ON public.audit_logs FOR SELECT USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'));
 
-CREATE POLICY "Users can update only their own profile" ON public.profiles
-FOR UPDATE USING (auth.uid() = id);
-
--- Contribution Submissions:
--- Drivers can read their own
-CREATE POLICY "Drivers can view their own submissions" ON public.contribution_submissions
-FOR SELECT USING (
-  auth.uid() = driver_id OR 
-  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
-);
-
--- Drivers can create their own submissions
-CREATE POLICY "Drivers can create their own submissions" ON public.contribution_submissions
-FOR INSERT WITH CHECK (
-  auth.uid() = driver_id
-);
-
--- Expenses:
-CREATE POLICY "Anyone can view expenses summary" ON public.expenses
-FOR SELECT USING (true);
-
-CREATE POLICY "Only admins can insert expenses" ON public.expenses
-FOR INSERT WITH CHECK (
-  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
-);
-
--- Financial Transactions (Ledger):
-CREATE POLICY "Public can view ledger" ON public.financial_transactions
-FOR SELECT USING (true);
-
--- Audit logs:
-CREATE POLICY "Only admins can view audit logs" ON public.audit_logs
-FOR SELECT USING (
-  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
-);
-
--- 12. ENABLE REALTIME
+-- 13. REALTIME
 ALTER PUBLICATION supabase_realtime ADD TABLE public.contribution_submissions;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.scheduled_withdrawals;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.financial_transactions;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.expenses;

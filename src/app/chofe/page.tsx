@@ -14,8 +14,8 @@ import {
   CheckCircle2,
   AlertCircle,
   Calendar,
-  CreditCard,
   FileText,
+  ArrowDownLeft,
 } from 'lucide-react';
 
 export default function DriverDashboardPage() {
@@ -38,98 +38,100 @@ export default function DriverDashboardPage() {
 
   const approvedSubs = submissions.filter((s) => s.status === 'APPROVED');
   const pendingSubs = submissions.filter((s) => s.status === 'PENDING');
-  const rejectedSubs = submissions.filter((s) => s.status === 'REJECTED');
+  const latestApproved = approvedSubs[0] || null;
 
   const totalContributedCentavos = approvedSubs.reduce((sum, s) => sum + s.amount_centavos, 0);
 
+  // Personalized Greeting in Haitian Creole
+  const firstName = currentUser?.full_name ? currentUser.full_name.split(' ')[0] : 'Chofè';
+
   return (
-    <div className="space-y-6">
-      {/* Top Header Card */}
-      <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="w-14 h-14 rounded-2xl bg-emerald-600 flex items-center justify-center text-white text-xl font-bold shadow-sm shadow-emerald-600/30">
-            {currentUser?.full_name ? currentUser.full_name.charAt(0) : 'C'}
-          </div>
-          <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-slate-900">
-              {currentUser?.full_name || 'Kont Mwen'}
-            </h1>
-            <p className="text-xs sm:text-sm text-slate-500">
-              {currentUser?.email} • Wòl: <span className="font-semibold text-emerald-700">Chofè</span>
-            </p>
-          </div>
+    <div className="space-y-6 max-w-4xl mx-auto pb-16 md:pb-6">
+      {/* Personalized Greeting Card (Nubank-style) */}
+      <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-100 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div>
+          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+            Kont Pèsonèl Chofè
+          </span>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight mt-1">
+            Bonjou, {firstName}!
+          </h1>
+          <p className="text-xs text-slate-500 mt-1">
+            {currentUser?.email} • Mèsi pou devouman ou pou legliz la
+          </p>
         </div>
 
         <Link
           href="/chofe/soumet"
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold shadow-xs transition"
+          className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl bg-slate-900 hover:bg-black text-white text-xs sm:text-sm font-bold shadow-xs transition"
         >
-          <PlusCircle className="w-4 h-4" />
+          <PlusCircle className="w-4 h-4 text-emerald-400" />
           Soumèt Kontribisyon
         </Link>
       </div>
 
-      {/* Driver Personal Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-xs">
-          <span className="text-xs font-semibold uppercase text-slate-500">
+      {/* Driver Personal Metrics */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {/* Personal total */}
+        <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-xs space-y-1">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
             Total Ou Kontribye
           </span>
-          <div className="text-2xl font-extrabold text-emerald-700 mt-2">
+          <div className="text-2xl font-extrabold text-slate-900 font-mono">
             {formatBRL(totalContributedCentavos)}
           </div>
-          <p className="text-xs text-slate-400 mt-1">
+          <p className="text-[11px] text-slate-400">
             {approvedSubs.length} jou travay apwouve
           </p>
         </div>
 
-        <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-xs">
-          <span className="text-xs font-semibold uppercase text-slate-500">
+        {/* Pending count */}
+        <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-xs space-y-1">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
             Kontribisyon an Atant
           </span>
-          <div className="text-2xl font-extrabold text-amber-600 mt-2">
+          <div className="text-2xl font-extrabold text-amber-700 font-mono">
             {pendingSubs.length}
           </div>
-          <p className="text-xs text-slate-400 mt-1">
-            Ap tann verifikasyon trezorye a
+          <p className="text-[11px] text-slate-400">
+            {pendingSubs.length > 0 ? 'Ap tann verifikasyon' : 'Pa gen anyen an atant'}
           </p>
         </div>
 
-        <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-xs">
-          <span className="text-xs font-semibold uppercase text-slate-500">
-            Kontribisyon Refize
+        {/* Latest approved */}
+        <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-xs space-y-1">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+            Dènye Kontribisyon Apwouve
           </span>
-          <div className="text-2xl font-extrabold text-rose-600 mt-2">
-            {rejectedSubs.length}
+          <div className="text-2xl font-extrabold text-slate-900 font-mono">
+            {latestApproved ? formatBRL(latestApproved.amount_centavos) : 'R$ 0,00'}
           </div>
-          <p className="text-xs text-slate-400 mt-1">
-            {rejectedSubs.length > 0 ? 'Gade rezon an anba a pou korije li' : 'Pa gen okenn refi'}
+          <p className="text-[11px] text-slate-400">
+            {latestApproved ? formatDateCreole(latestApproved.work_date) : 'Poko genyen'}
           </p>
         </div>
       </div>
 
-      {/* Personal Submissions History */}
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-xs overflow-hidden">
-        <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+      {/* Compact Activity Feed */}
+      <div className="bg-white rounded-3xl border border-slate-100 shadow-xs overflow-hidden">
+        <div className="p-5 sm:p-6 border-b border-slate-100 flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-bold text-slate-900">Istwa Kontribisyon Ou Yo</h2>
-            <p className="text-xs text-slate-500 mt-0.5">
+            <h2 className="text-base font-bold text-slate-900">Istwa Kontribisyon Ou Yo</h2>
+            <p className="text-xs text-slate-400 mt-0.5">
               Tout kontribisyon ou soumèt pou jou ou te travay yo
             </p>
           </div>
         </div>
 
         {loading ? (
-          <div className="p-8 text-center text-slate-400 animate-pulse">
-            Chajman done yo...
-          </div>
+          <div className="p-8 text-center text-xs text-slate-400">Chajman done yo...</div>
         ) : submissions.length === 0 ? (
           <div className="py-12 text-center text-slate-400">
-            <Clock className="w-8 h-8 mx-auto mb-2 opacity-40" />
-            <p className="text-sm font-medium text-slate-600">Ou poko soumèt okenn kontribisyon</p>
+            <Clock className="w-8 h-8 mx-auto mb-2 opacity-30" />
+            <p className="text-sm font-semibold text-slate-700">Ou poko soumèt okenn kontribisyon</p>
             <Link
               href="/chofe/soumet"
-              className="mt-3 inline-flex items-center gap-1.5 text-xs text-emerald-600 hover:text-emerald-700 font-semibold"
+              className="mt-3 inline-flex items-center gap-1.5 text-xs text-emerald-700 font-bold hover:underline"
             >
               <PlusCircle className="w-3.5 h-3.5" />
               Soumèt premye kontribisyon ou
@@ -138,40 +140,35 @@ export default function DriverDashboardPage() {
         ) : (
           <div className="divide-y divide-slate-100">
             {submissions.map((sub) => (
-              <div key={sub.id} className="p-5 hover:bg-slate-50/50 transition space-y-3">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div key={sub.id} className="p-4 sm:p-5 hover:bg-slate-50/50 transition space-y-2">
+                <div className="flex items-center justify-between gap-3 text-xs">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600">
-                      <Calendar className="w-5 h-5 text-emerald-600" />
+                    <div className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600 shrink-0">
+                      <ArrowDownLeft className="w-4 h-4 text-emerald-600" />
                     </div>
                     <div>
-                      <div className="font-semibold text-slate-900 text-sm">
-                        Dat Travay: {formatDateCreole(sub.work_date, 'long')}
+                      <div className="font-bold text-slate-900 text-sm">
+                        Travay: {formatDateCreole(sub.work_date, 'long')}
                       </div>
-                      <div className="text-xs text-slate-500">
+                      <div className="text-[11px] text-slate-400 mt-0.5">
                         Peman: {formatDateCreole(sub.payment_date)} • Metòd: {sub.payment_method}
                       </div>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-3 self-end sm:self-auto">
-                    <div className="text-right">
-                      <div className="text-base font-bold text-slate-900">
-                        {formatBRL(sub.amount_centavos)}
-                      </div>
-                      <div className="text-[11px] text-slate-400">
-                        Soumèt: {formatDateCreole(sub.created_at)}
-                      </div>
+                  <div className="text-right shrink-0">
+                    <div className="text-base font-bold text-slate-900 font-mono">
+                      +{formatBRL(sub.amount_centavos)}
                     </div>
-                    <StatusBadge status={sub.status} />
+                    <div className="mt-0.5">
+                      <StatusBadge status={sub.status} />
+                    </div>
                   </div>
                 </div>
 
-                {/* Additional details: note or rejection reason */}
                 {sub.note && (
-                  <div className="text-xs text-slate-600 bg-slate-50 p-2.5 rounded-lg border border-slate-100 flex items-start gap-2">
-                    <FileText className="w-3.5 h-3.5 text-slate-400 mt-0.5 shrink-0" />
-                    <span>Nòt ou te mete: {sub.note}</span>
+                  <div className="text-[11px] text-slate-600 bg-slate-50 p-2 rounded-xl border border-slate-100">
+                    Nòt: {sub.note}
                   </div>
                 )}
 
@@ -180,9 +177,6 @@ export default function DriverDashboardPage() {
                     <AlertCircle className="w-4 h-4 text-rose-600 mt-0.5 shrink-0" />
                     <div>
                       <span className="font-bold">Rezon Refi:</span> {sub.rejection_reason}
-                      <p className="mt-1 text-[11px] text-rose-700">
-                        Ou ka korije enfòmasyon sa yo epi soumèt kontribisyon an ankò.
-                      </p>
                     </div>
                   </div>
                 )}

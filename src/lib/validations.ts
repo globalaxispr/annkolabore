@@ -36,7 +36,7 @@ export const contributionSchema = z.object({
   amount_centavos: z
     .number()
     .int('Montan an dwe yon chif antye')
-    .min(100, 'Montan minimòm nan se R$ 1,00'),
+    .min(1000, 'Kontribisyon an dwe omwen R$ 10,00.'),
   payment_method: z.enum(['PIX', 'Espès', 'Transfè', 'Lòt'], {
     message: 'Tanpri chwazi yon metòd peman valab',
   }),
@@ -56,15 +56,30 @@ export const rejectSubmissionSchema = z.object({
 
 export type RejectSubmissionInput = z.infer<typeof rejectSubmissionSchema>;
 
-export const expenseSchema = z.object({
+export const scheduledWithdrawalSchema = z.object({
+  description: z.string().min(3, 'Deskripsyon retrè a dwe gen omwen 3 karaktè'),
   amount_centavos: z
     .number()
     .int()
-    .min(100, 'Montan depans lan dwe omwen R$ 1,00'),
-  expense_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Tanpri chwazi yon dat depans ki valab'),
-  description: z.string().min(3, 'Deskripsyon depans lan dwe gen omwen 3 karaktè'),
-  category: z.string().min(2, 'Tanpri chwazi oswa mete yon kategori'),
-  reference_note: z.string().max(255).optional(),
+    .min(100, 'Montan retrè a dwe omwen R$ 1,00'),
+  scheduled_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Tanpri chwazi yon dat ki valab'),
+  scheduled_time: z.string().optional(),
+  note: z.string().max(500, 'Nòt la pa ka depase 500 karaktè').optional(),
 });
 
-export type ExpenseInput = z.infer<typeof expenseSchema>;
+export type ScheduledWithdrawalInput = z.infer<typeof scheduledWithdrawalSchema>;
+
+export const cancelWithdrawalSchema = z.object({
+  cancellation_reason: z
+    .string()
+    .min(5, 'Rezon anilasyon an dwe gen omwen 5 karaktè')
+    .max(500, 'Rezon an twò long'),
+});
+
+export type CancelWithdrawalInput = z.infer<typeof cancelWithdrawalSchema>;
+
+/**
+ * Legacy schema alias for backward compatibility
+ */
+export const expenseSchema = scheduledWithdrawalSchema;
+export type ExpenseInput = ScheduledWithdrawalInput;

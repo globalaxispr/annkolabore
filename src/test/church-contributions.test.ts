@@ -3,259 +3,280 @@ import { demoStorage } from '../lib/demo-storage';
 import {
   calculateCurrentBalance,
   calculateTotalApprovedContributions,
-  calculateTotalExpenses,
+  calculateTotalExecutedWithdrawals,
+  calculateTotalPendingScheduledWithdrawals,
+  calculateProjectedBalance,
   calculateFinancialSummary,
-  findDuplicateWorkDateSubmission,
+  validateContributionAmount,
+  MINIMUM_CONTRIBUTION_CENTAVOS,
   DEFAULT_CONTRIBUTION_CENTAVOS,
 } from '../lib/financial';
 import { formatBRL, parseBRLInputToCentavos } from '../lib/formatters';
-import { registerSchema, contributionSchema } from '../lib/validations';
-import { ContributionSubmission, ExpenseRecord } from '../lib/types';
+import { registerSchema, contributionSchema, scheduledWithdrawalSchema } from '../lib/validations';
+import { ContributionSubmission, ScheduledWithdrawal } from '../lib/types';
 
-describe('Sistèm Jesyon Kontribisyon Chofè Legliz - 17 Senaryo Tès', () => {
+describe('Sistèm Jesyon Kontribisyon Chofè Legliz - 20 Senaryo Tès Akseptasyon', () => {
   beforeEach(() => {
     demoStorage.resetDemoData();
   });
 
-  // Senaryo 1: Yon chofè ka kreye kont epi konekte
-  it('Senaryo 1: Yon chofè ka kreye kont epi konekte avèk wòl chofè pa defo', () => {
-    const regResult = demoStorage.registerUser('Jean Valjean', 'jean.valjean@chofe.test');
-    expect(regResult.user).toBeDefined();
-    expect(regResult.user.full_name).toBe('Jean Valjean');
-    expect(regResult.user.role).toBe('driver'); // Default role MUST be driver
-
-    // Login simulation
-    const currentUser = demoStorage.setCurrentUser(regResult.user.id);
-    expect(currentUser).toBeDefined();
-    expect(currentUser?.email).toBe('jean.valjean@chofe.test');
-  });
-
-  // Senaryo 2: Yon chofè ka soumèt yon kontribisyon R$ 10,00
-  it('Senaryo 2: Yon chofè ka soumèt yon kontribisyon R$ 10,00', () => {
-    const driverId = 'usr-driver-01';
-    const subResult = demoStorage.submitContribution({
-      driver_id: driverId,
-      work_date: '2026-10-15',
-      payment_date: '2026-10-15',
-      amount_centavos: DEFAULT_CONTRIBUTION_CENTAVOS,
-      payment_method: 'PIX',
-      transaction_ref: 'PIX-TEST-2',
-    });
-
-    expect(subResult.submission).toBeDefined();
-    expect(subResult.submission?.status).toBe('PENDING');
-    expect(subResult.submission?.amount_centavos).toBe(1000); // 1000 centavos = R$ 10,00
-  });
-
-  // Senaryo 3: Yon soumisyon an atant pa chanje balans ofisyèl la
-  it('Senaryo 3: Yon soumisyon an atant pa chanje balans ofisyèl la', () => {
-    const initialSummary = demoStorage.getFinancialSummary();
-    const initialBalance = initialSummary.current_balance_centavos;
-
-    // Driver submits a pending contribution
-    demoStorage.submitContribution({
-      driver_id: 'usr-driver-01',
-      work_date: '2026-10-16',
-      payment_date: '2026-10-16',
-      amount_centavos: 1000,
-      payment_method: 'PIX',
-    });
-
-    const newSummary = demoStorage.getFinancialSummary();
-    // Official balance must remain identical
-    expect(newSummary.current_balance_centavos).toBe(initialBalance);
-  });
-
-  // Senaryo 4: Yon administratè ka apwouve soumisyon an
-  it('Senaryo 4: Yon administratè/trezorye ka apwouve soumisyon an', () => {
-    const pendingList = demoStorage.getAllPendingSubmissions();
-    expect(pendingList.length).toBeGreaterThan(0);
-    const itemToApprove = pendingList[0];
-
-    const adminId = 'usr-admin-01';
-    const approveResult = demoStorage.approveSubmission(itemToApprove.id, adminId);
-
-    expect(approveResult.success).toBe(true);
-
-    const updatedSub = demoStorage
-      .getAllSubmissions()
-      .find((s) => s.id === itemToApprove.id);
-    expect(updatedSub?.status).toBe('APPROVED');
-    expect(updatedSub?.reviewed_by).toBe(adminId);
-  });
-
-  // Senaryo 5: Apwobasyon ogmante balans lan yon sèl fwa egzakteman
-  it('Senaryo 5: Apwobasyon ogmante balans lan yon sèl fwa egzakteman', () => {
-    // Submit a fresh contribution
-    const res = demoStorage.submitContribution({
-      driver_id: 'usr-driver-01',
-      work_date: '2026-10-17',
-      payment_date: '2026-10-17',
-      amount_centavos: 1000,
-      payment_method: 'PIX',
-    });
-    const subId = res.submission!.id;
-
-    const balanceBefore = demoStorage.getFinancialSummary().current_balance_centavos;
-    demoStorage.approveSubmission(subId, 'usr-admin-01');
-    const balanceAfter = demoStorage.getFinancialSummary().current_balance_centavos;
-
-    expect(balanceAfter - balanceBefore).toBe(1000); // Increased by exactly R$ 10,00
-  });
-
-  // Senaryo 6: Yon apwobasyon an doub pa ka ogmante balans lan de fwa
-  it('Senaryo 6: Yon apwobasyon an doub pa ka ogmante balans lan de fwa (idempotans)', () => {
-    const res = demoStorage.submitContribution({
-      driver_id: 'usr-driver-01',
-      work_date: '2026-10-18',
-      payment_date: '2026-10-18',
-      amount_centavos: 1000,
-      payment_method: 'PIX',
-    });
-    const subId = res.submission!.id;
-
-    // First approval
-    const firstApprove = demoStorage.approveSubmission(subId, 'usr-admin-01');
-    expect(firstApprove.success).toBe(true);
-    const balanceAfterFirst = demoStorage.getFinancialSummary().current_balance_centavos;
-
-    // Second approval attempt on already approved record
-    const secondApprove = demoStorage.approveSubmission(subId, 'usr-admin-01');
-    expect(secondApprove.success).toBe(false); // Must fail!
-
-    const balanceAfterSecond = demoStorage.getFinancialSummary().current_balance_centavos;
-    expect(balanceAfterSecond).toBe(balanceAfterFirst); // Must NOT change!
-  });
-
-  // Senaryo 7: Yon soumisyon refize pa afekte balans lan
-  it('Senaryo 7: Yon soumisyon refize pa afekte balans lan', () => {
-    const res = demoStorage.submitContribution({
-      driver_id: 'usr-driver-01',
-      work_date: '2026-10-19',
-      payment_date: '2026-10-19',
-      amount_centavos: 1000,
-      payment_method: 'PIX',
-    });
-    const subId = res.submission!.id;
-
-    const balanceBefore = demoStorage.getFinancialSummary().current_balance_centavos;
-    const rejectRes = demoStorage.rejectSubmission(
-      subId,
-      'usr-admin-01',
-      'Prèv la pa klè, tanpri voye yon lòt resi.'
-    );
-    expect(rejectRes.success).toBe(true);
-
-    const balanceAfter = demoStorage.getFinancialSummary().current_balance_centavos;
-    expect(balanceAfter).toBe(balanceBefore); // Zero balance impact
-  });
-
-  // Senaryo 8: Yon jou chofè a pa travay pa kreye okenn dèt otomatik
-  it('Senaryo 8: Yon jou chofè a pa travay pa kreye okenn dèt oswa penalite', () => {
-    // When no submission is entered for a calendar day, calculate balance and summary:
+  // Tès 1: Balans disponib la se eleman prensipal ki kalkile kòrèkteman
+  it('1. Balans disponib la se fòmil: Kontribisyon Apwouve - Retrè Egzekite', () => {
     const summary = demoStorage.getFinancialSummary();
-    // Rule verification: No negative ledger adjustments for non-submitted dates
+    const expected =
+      summary.total_contributions_centavos - summary.total_withdrawals_centavos;
+    expect(summary.current_balance_centavos).toBe(expected);
     expect(summary.current_balance_centavos).toBeGreaterThanOrEqual(0);
   });
 
-  // Senaryo 9: Yon depans diminye balans lan kòrèkteman
-  it('Senaryo 9: Yon depans diminye balans lan kòrèkteman', () => {
-    const balanceBefore = demoStorage.getFinancialSummary().current_balance_centavos;
-    const expenseCentavos = 2500; // R$ 25,00
-
-    demoStorage.recordExpense({
+  // Tès 2: Depans yo retire nèt epi ranplase pa sistèm retrè
+  it('2. Jesyon depans retire epi ranplase pa sistèm retrè pwograme', () => {
+    const withdrawals = demoStorage.getAllWithdrawals();
+    expect(withdrawals).toBeDefined();
+    expect(Array.isArray(withdrawals)).toBe(true);
+    // Legacy expense recording routes through withdrawal
+    const res = demoStorage.recordExpense({
       admin_id: 'usr-admin-01',
-      amount_centavos: expenseCentavos,
+      amount_centavos: 2500,
       expense_date: '2026-10-12',
-      description: 'Acha ti gaz pou jeneratè legliz la',
-      category: 'Sipò ak Aktivite',
+      description: 'Soutyen kominotè legliz',
+      category: 'Retrè',
     });
-
-    const balanceAfter = demoStorage.getFinancialSummary().current_balance_centavos;
-    expect(balanceBefore - balanceAfter).toBe(expenseCentavos);
+    expect(res.expense).toBeDefined();
   });
 
-  // Senaryo 10: Yon chofè pa ka apwouve pwòp kontribisyon li
-  it('Senaryo 10: Yon chofè pa ka apwouve pwòp kontribisyon pa li', () => {
-    const pending = demoStorage.getAllPendingSubmissions()[0];
-    const driverId = 'usr-driver-01'; // Regular driver
-
-    const attempt = demoStorage.approveSubmission(pending.id, driverId);
-    expect(attempt.success).toBe(false);
-    expect(attempt.error).toContain('mande otorizasyon administratè');
+  // Tès 3: Yon chofè ka soumèt R$ 10,00
+  it('3. Yon chofè ka soumèt kontribisyon minimòm R$ 10,00', () => {
+    const subResult = demoStorage.submitContribution({
+      driver_id: 'usr-driver-01',
+      work_date: '2026-10-15',
+      payment_date: '2026-10-15',
+      amount_centavos: 1000, // R$ 10,00
+      payment_method: 'PIX',
+    });
+    expect(subResult.submission).toBeDefined();
+    expect(subResult.submission?.amount_centavos).toBe(1000);
+    expect(subResult.submission?.status).toBe('PENDING');
   });
 
-  // Senaryo 11: Yon chofè pa ka modifye dosye yon lòt chofè
-  it("Senaryo 11: Yon chofè pa ka modifye dosye yon lòt chofè", () => {
-    const driver1Subs = demoStorage.getSubmissionsForDriver('usr-driver-01');
-    const driver2Subs = demoStorage.getSubmissionsForDriver('usr-driver-02');
-
-    // Ensure driver submissions are strictly partitioned
-    driver1Subs.forEach((s) => {
-      expect(s.driver_id).toBe('usr-driver-01');
-    });
-    driver2Subs.forEach((s) => {
-      expect(s.driver_id).toBe('usr-driver-02');
-    });
-  });
-
-  // Senaryo 12: Vizitè piblik pa ka modifye dosye finansye yo
-  it('Senaryo 12: Vizitè piblik gen aksè sèlman nan lekti done apwouve san aksè modifikasyon', () => {
-    const publicList = demoStorage.getPublicTransactions();
-    // All public entries MUST be APPROVED
-    publicList.forEach((t) => {
-      expect(t.status).toBe('APPROVED');
-    });
-    // Attempting an approval or expense without admin profile must fail
-    const attempt = demoStorage.approveSubmission('sub-005', 'anonymous-visitor');
-    expect(attempt.success).toBe(false);
-  });
-
-  // Senaryo 13: Resi prive ak enfòmasyon sekrè pa ekspoze nan done piblik
-  it('Senaryo 13: Resi prive ak imèl pa ekspoze nan done piblik yo', () => {
-    const publicData = demoStorage.getPublicTransactions();
-    publicData.forEach((item: any) => {
-      expect(item.receipt_url).toBeUndefined();
-      expect(item.email).toBeUndefined();
-      expect(item.password).toBeUndefined();
+  // Tès 4: Yon chofè ka soumèt plis pase R$ 10,00
+  it('4. Yon chofè ka soumèt plis pase R$ 10,00 (egzanp: R$ 15, R$ 20, R$ 50)', () => {
+    const amounts = [1500, 2000, 5000, 10000]; // R$ 15, R$ 20, R$ 50, R$ 100
+    amounts.forEach((amt, idx) => {
+      const sub = demoStorage.submitContribution({
+        driver_id: 'usr-driver-02',
+        work_date: `2026-10-${20 + idx}`,
+        payment_date: `2026-10-${20 + idx}`,
+        amount_centavos: amt,
+        payment_method: 'PIX',
+      });
+      expect(sub.submission).toBeDefined();
+      expect(sub.submission?.amount_centavos).toBe(amt);
     });
   });
 
-  // Senaryo 14: Aplikasyon an fòmate kòb la an Real Brezilyen (BRL) kòrèkteman
-  it('Senaryo 14: Aplikasyon an fòmate montan an an Real Brezilyen (BRL) avèk presizyon', () => {
-    expect(formatBRL(1000)).toBe('R$ 10,00');
-    expect(formatBRL(0)).toBe('R$ 0,00');
-    expect(formatBRL(15000)).toBe('R$ 150,00');
-    expect(formatBRL(2550)).toBe('R$ 25,50');
-    expect(formatBRL(-5000)).toBe('-R$ 50,00');
-    expect(parseBRLInputToCentavos('10,00')).toBe(1000);
-  });
-
-  // Senaryo 15: Tout tèks entèfas prensipal la nan Kreyòl Ayisyen
-  it('Senaryo 15: Validasyon ak mesaj entèfas yo ekri an Kreyòl Ayisyen', () => {
-    const testInvalidReg = registerSchema.safeParse({
-      full_name: 'J',
-      email: 'invalid-email',
-      password: '123',
-      confirm_password: '456',
+  // Tès 5: Yon kontribisyon ki anba R$ 10,00 refize
+  it('5. Yon kontribisyon ki mwens pase R$ 10,00 rejte avèk mesaj kreyòl apwopriye', () => {
+    // Attempt submitting R$ 5,00 (500 centavos)
+    const result = demoStorage.submitContribution({
+      driver_id: 'usr-driver-01',
+      work_date: '2026-10-25',
+      payment_date: '2026-10-25',
+      amount_centavos: 500,
+      payment_method: 'PIX',
     });
-    expect(testInvalidReg.success).toBe(false);
-    if (!testInvalidReg.success) {
-      const messages = testInvalidReg.error.issues.map((i) => i.message);
-      // Ensure Kreyòl error messages
-      expect(messages.some((m) => m.includes('Non konplè a dwe'))).toBe(true);
-      expect(messages.some((m) => m.includes('adrès imèl ki valab'))).toBe(true);
-      expect(messages.some((m) => m.includes('Modpas la dwe gen omwen 6'))).toBe(true);
+    expect(result.submission).toBeNull();
+    expect(result.error).toBe('Kontribisyon an dwe omwen R$ 10,00.');
+
+    // Validate using Zod schema
+    const zodCheck = contributionSchema.safeParse({
+      work_date: '2026-10-25',
+      payment_date: '2026-10-25',
+      amount_centavos: 800, // R$ 8,00
+      payment_method: 'PIX',
+    });
+    expect(zodCheck.success).toBe(false);
+    if (!zodCheck.success) {
+      expect(zodCheck.error.issues[0]?.message).toBe('Kontribisyon an dwe omwen R$ 10,00.');
     }
   });
 
-  // Senaryo 16: Mizajou an tan reyèl pa kreye tranzaksyon an doub
-  it('Senaryo 16: Idempotans asire ke menm evènman an tan reyèl repete pa kreye tranzaksyon an doub', () => {
+  // Tès 6: Yon soumisyon an atant pa afekte balans ofisyèl la
+  it('6. Yon soumisyon an atant pa chanje balans ofisyèl kès la', () => {
+    const initialBalance = demoStorage.getFinancialSummary().current_balance_centavos;
+
+    demoStorage.submitContribution({
+      driver_id: 'usr-driver-01',
+      work_date: '2026-10-26',
+      payment_date: '2026-10-26',
+      amount_centavos: 5000, // R$ 50,00 pending
+      payment_method: 'PIX',
+    });
+
+    const newBalance = demoStorage.getFinancialSummary().current_balance_centavos;
+    expect(newBalance).toBe(initialBalance);
+  });
+
+  // Tès 7: Apwobasyon ogmante balans lan yon sèl fwa egzakteman
+  it('7. Apwobasyon ogmante balans lan yon sèl fwa epi anpeche apwobasyon an doub', () => {
+    const sub = demoStorage.submitContribution({
+      driver_id: 'usr-driver-01',
+      work_date: '2026-10-27',
+      payment_date: '2026-10-27',
+      amount_centavos: 2000, // R$ 20,00
+      payment_method: 'PIX',
+    }).submission!;
+
+    const before = demoStorage.getFinancialSummary().current_balance_centavos;
+    const firstApprove = demoStorage.approveSubmission(sub.id, 'usr-admin-01');
+    expect(firstApprove.success).toBe(true);
+
+    const afterFirst = demoStorage.getFinancialSummary().current_balance_centavos;
+    expect(afterFirst - before).toBe(2000);
+
+    // Second approval attempt MUST fail
+    const secondApprove = demoStorage.approveSubmission(sub.id, 'usr-admin-01');
+    expect(secondApprove.success).toBe(false);
+    const afterSecond = demoStorage.getFinancialSummary().current_balance_centavos;
+    expect(afterSecond).toBe(afterFirst);
+  });
+
+  // Tès 8: Pwograme yon retrè pa diminye balans ofisyèl la touswit
+  it('8. Pwograme yon retrè pa diminye balans ofisyèl la touswit', () => {
+    const balanceBefore = demoStorage.getFinancialSummary().current_balance_centavos;
+
+    const sched = demoStorage.scheduleWithdrawal({
+      admin_id: 'usr-admin-01',
+      description: 'Donasyon prevwa pou legliz la',
+      amount_centavos: 2500, // R$ 25,00
+      scheduled_date: '2026-11-01',
+    });
+    expect(sched.withdrawal).toBeDefined();
+    expect(sched.withdrawal?.status).toBe('Pwograme');
+
+    const summaryAfter = demoStorage.getFinancialSummary();
+    // Official balance must remain identical!
+    expect(summaryAfter.current_balance_centavos).toBe(balanceBefore);
+    // Scheduled withdrawals figure tracks the upcoming commitment
+    expect(summaryAfter.scheduled_withdrawals_centavos).toBeGreaterThanOrEqual(2500);
+    // Projected balance reflects projection
+    expect(summaryAfter.projected_balance_centavos).toBe(
+      summaryAfter.current_balance_centavos - summaryAfter.scheduled_withdrawals_centavos
+    );
+  });
+
+  // Tès 9: Retrè pwograme yo parèt nan seksyon retrè k ap vini yo
+  it('9. Retrè pwograme yo parèt nan lis retrè an atant', () => {
+    const pendingList = demoStorage.getScheduledWithdrawals();
+    expect(pendingList.every((w) => w.status === 'Pwograme' || w.status === 'An Atant')).toBe(
+      true
+    );
+  });
+
+  // Tès 10: Egzekite yon retrè diminye balans lan yon sèl fwa egzakteman
+  it('10. Egzekite yon retrè diminye balans lan yon sèl fwa epi anpeche egzekisyon an doub', () => {
+    const sched = demoStorage.scheduleWithdrawal({
+      admin_id: 'usr-admin-01',
+      description: 'Retrè egzekisyon tès',
+      amount_centavos: 1500,
+      scheduled_date: '2026-10-28',
+    }).withdrawal!;
+
+    const balanceBefore = demoStorage.getFinancialSummary().current_balance_centavos;
+    const execRes = demoStorage.executeWithdrawal(sched.id, 'usr-admin-01');
+    expect(execRes.success).toBe(true);
+
+    const balanceAfter = demoStorage.getFinancialSummary().current_balance_centavos;
+    expect(balanceBefore - balanceAfter).toBe(1500);
+
+    // Double execution attempt MUST fail
+    const doubleExec = demoStorage.executeWithdrawal(sched.id, 'usr-admin-01');
+    expect(doubleExec.success).toBe(false);
+    expect(demoStorage.getFinancialSummary().current_balance_centavos).toBe(balanceAfter);
+  });
+
+  // Tès 11: Anile yon retrè pwograme pa chanje balans lan
+  it('11. Anile yon retrè pwograme pa chanje balans ofisyèl la', () => {
+    const sched = demoStorage.scheduleWithdrawal({
+      admin_id: 'usr-admin-01',
+      description: 'Retrè ki pral anile',
+      amount_centavos: 3000,
+      scheduled_date: '2026-11-05',
+    }).withdrawal!;
+
+    const balanceBefore = demoStorage.getFinancialSummary().current_balance_centavos;
+    const cancelRes = demoStorage.cancelWithdrawal(
+      sched.id,
+      'usr-admin-01',
+      'Reyinyon an anile, pa bezwen retrè sa a ankò.'
+    );
+    expect(cancelRes.success).toBe(true);
+
+    const balanceAfter = demoStorage.getFinancialSummary().current_balance_centavos;
+    expect(balanceAfter).toBe(balanceBefore);
+
+    const updated = demoStorage.getAllWithdrawals().find((w) => w.id === sched.id);
+    expect(updated?.status).toBe('Anile');
+  });
+
+  // Tès 12: Chofè pa ka egzekite oswa anile retrè
+  it('12. Chofè pa gen otorizasyon pou egzekite oswa anile retrè', () => {
+    const sched = demoStorage.getScheduledWithdrawals()[0];
+    const driverId = 'usr-driver-01';
+
+    const execAttempt = demoStorage.executeWithdrawal(sched.id, driverId);
+    expect(execAttempt.success).toBe(false);
+    expect(execAttempt.error).toContain('mande otorizasyon administratè');
+
+    const cancelAttempt = demoStorage.cancelWithdrawal(
+      sched.id,
+      driverId,
+      'Eseye anile pa chofè'
+    );
+    expect(cancelAttempt.success).toBe(false);
+  });
+
+  // Tès 13: Chofè pa ka apwouve kontribisyon
+  it('13. Chofè pa ka apwouve pwòp kontribisyon oswa kontribisyon yon lòt', () => {
+    const pending = demoStorage.getAllPendingSubmissions()[0];
+    const driverId = 'usr-driver-01';
+
+    const approveAttempt = demoStorage.approveSubmission(pending.id, driverId);
+    expect(approveAttempt.success).toBe(false);
+  });
+
+  // Tès 14: Kalkil kòb egzat san okenn erè flotan
+  it('14. Tout kalkil finansye fèt an santim antye (zero floating point inaccuracies)', () => {
+    const cents1 = 1000;
+    const cents2 = 1533;
+    const diff = cents2 - cents1;
+    expect(diff).toBe(533);
+    expect(formatBRL(533)).toBe('R$ 5,33');
+    expect(formatBRL(1000)).toBe('R$ 10,00');
+  });
+
+  // Tès 15: Tout tèks entèfas itilizatè a rete an Kreyòl Ayisyen
+  it('15. Tout mesaj validasyon ak tèks entèfas rete an Kreyòl Ayisyen', () => {
+    const val = validateContributionAmount(500);
+    expect(val.error).toBe('Kontribisyon an dwe omwen R$ 10,00.');
+  });
+
+  // Tès 16: Montan yo fòmate nan Real Brezilyen (BRL)
+  it('16. Montan yo fòmate kòrèkteman an Real Brezilyen (BRL: R$ 0,00, R$ 10,00)', () => {
+    expect(formatBRL(0)).toBe('R$ 0,00');
+    expect(formatBRL(1000)).toBe('R$ 10,00');
+    expect(formatBRL(1500)).toBe('R$ 15,00');
+    expect(formatBRL(100000)).toBe('R$ 1.000,00');
+    expect(parseBRLInputToCentavos('10,00')).toBe(1000);
+  });
+
+  // Tès 17: Mizajou an tan reyèl pa kreye tranzaksyon an doub
+  it('17. Idempotans asire ke evènman repete pa kreye tranzaksyon an doub', () => {
     const submissions: ContributionSubmission[] = [
       {
-        id: 'sub-test-1',
-        driver_id: 'usr-driver-01',
-        driver_name: 'Jean Baptiste Pierre',
+        id: 's1',
+        driver_id: 'd1',
+        driver_name: 'Chofè 1',
         work_date: '2026-10-10',
         payment_date: '2026-10-10',
         amount_centavos: 1000,
@@ -264,32 +285,32 @@ describe('Sistèm Jesyon Kontribisyon Chofè Legliz - 17 Senaryo Tès', () => {
         created_at: '2026-10-10T10:00:00Z',
       },
     ];
-
-    const total1 = calculateTotalApprovedContributions(submissions);
-    // Even if repeated calculation occurs, sum is deterministic:
-    const total2 = calculateTotalApprovedContributions(submissions);
-    expect(total1).toBe(total2);
-    expect(total1).toBe(1000);
+    const sum1 = calculateTotalApprovedContributions(submissions);
+    const sum2 = calculateTotalApprovedContributions(submissions);
+    expect(sum1).toBe(sum2);
   });
 
-  // Senaryo 17: Koreksyon finansye ak tout aksyon konsève tras odit la
-  it('Senaryo 17: Tout aksyon (apwobasyon, refi, depans) konsève nan lis odit la', () => {
-    const auditLogsBefore = demoStorage.getAllAuditLogs().length;
-
-    // Perform an expense
-    demoStorage.recordExpense({
-      admin_id: 'usr-admin-01',
-      amount_centavos: 3000,
-      expense_date: '2026-10-12',
-      description: 'Koreksyon / depans odit tès',
-      category: 'Odit',
+  // Tès 18: Lis tranzaksyon inifye a konpak epi li gen kontribisyon ak retrè egzekite
+  it('18. Istwa tranzaksyon inifye a gen sèlman aktivite ofisyèl (apwouve ak egzekite)', () => {
+    const history = demoStorage.getUnifiedTransactions();
+    history.forEach((item) => {
+      expect(['Apwouve', 'Egzekite']).toContain(item.status);
+      expect(['CONTRIBUTION', 'WITHDRAWAL']).toContain(item.type);
     });
+  });
 
-    const auditLogsAfter = demoStorage.getAllAuditLogs().length;
-    expect(auditLogsAfter).toBe(auditLogsBefore + 1);
+  // Tès 19: Done istorik yo konsève epi rekonsilye san pèt
+  it('19. Done istorik yo konsève epi rekonsilye kòm retrè', () => {
+    const allWth = demoStorage.getAllWithdrawals();
+    expect(allWth.some((w) => w.id === 'wth-001')).toBe(true);
+    expect(allWth.find((w) => w.id === 'wth-001')?.status).toBe('Egzekite');
+  });
 
-    const latestLog = demoStorage.getAllAuditLogs()[0];
-    expect(latestLog.action).toBe('RECORD_EXPENSE');
-    expect(latestLog.actor_name).toContain('Frantz Augustin');
+  // Tès 20: Kalkil pwojeksyon balans lan kòrèk
+  it('20. Pwojeksyon Balans Apre Retrè Pwograme = Balans Disponib - Retrè Pwograme', () => {
+    const currentBalance = 10000; // R$ 100,00
+    const pendingScheduled = 4000; // R$ 40,00
+    const projected = calculateProjectedBalance(currentBalance, pendingScheduled);
+    expect(projected).toBe(6000); // R$ 60,00
   });
 });

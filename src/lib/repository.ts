@@ -5,8 +5,20 @@ import {
   ContributionSubmission,
   ExpenseRecord,
   FinancialSummary,
+  ScheduledWithdrawal,
   UserProfile,
 } from './types';
+
+export interface UnifiedTransactionItem {
+  id: string;
+  type: 'CONTRIBUTION' | 'WITHDRAWAL';
+  title: string;
+  description: string;
+  amount_centavos: number;
+  transaction_date: string;
+  status: string;
+  actor_name?: string;
+}
 
 export interface RepositoryState {
   isDemo: boolean;
@@ -21,9 +33,12 @@ export interface RepositoryState {
     approval_date: string;
     status: string;
   }[]>;
+  getUnifiedTransactions: () => Promise<UnifiedTransactionItem[]>;
   getDriverSubmissions: (driverId: string) => Promise<ContributionSubmission[]>;
   getPendingSubmissions: () => Promise<ContributionSubmission[]>;
   getAllSubmissions: () => Promise<ContributionSubmission[]>;
+  getAllWithdrawals: () => Promise<ScheduledWithdrawal[]>;
+  getScheduledWithdrawals: () => Promise<ScheduledWithdrawal[]>;
   getAllExpenses: () => Promise<ExpenseRecord[]>;
   getAllAuditLogs: () => Promise<AuditLogEntry[]>;
   getAllMembers: () => Promise<UserProfile[]>;
@@ -45,6 +60,23 @@ export interface RepositoryState {
     submissionId: string,
     adminId: string,
     rejectionReason: string
+  ) => Promise<{ success: boolean; error?: string }>;
+  scheduleWithdrawal: (data: {
+    admin_id: string;
+    description: string;
+    amount_centavos: number;
+    scheduled_date: string;
+    scheduled_time?: string;
+    note?: string;
+  }) => Promise<{ withdrawal: ScheduledWithdrawal | null; error?: string }>;
+  executeWithdrawal: (
+    withdrawalId: string,
+    adminId: string
+  ) => Promise<{ success: boolean; error?: string }>;
+  cancelWithdrawal: (
+    withdrawalId: string,
+    adminId: string,
+    reason: string
   ) => Promise<{ success: boolean; error?: string }>;
   recordExpense: (data: {
     admin_id: string;
@@ -82,12 +114,26 @@ export const repository: RepositoryState = {
     const supabase = createClient();
     if (!supabase) return demoStorage.getFinancialSummary();
 
-    // Query from Supabase RPC or view
     const { data, error } = await supabase.rpc('get_financial_summary');
     if (error || !data) {
       return demoStorage.getFinancialSummary();
     }
     return data as FinancialSummary;
+  },
+
+  async getUnifiedTransactions(): Promise<UnifiedTransactionItem[]> {
+    if (!isSupabaseConfigured()) {
+      return demoStorage.getUnifiedTransactions();
+    }
+    const supabase = createClient();
+    if (!supabase) return demoStorage.getUnifiedTransactions();
+
+    const { data } = await supabase
+      .from('public_financial_records')
+      .select('*')
+      .order('transaction_date', { ascending: false });
+
+    return data || [];
   },
 
   async getPublicTransactions() {
@@ -153,19 +199,39 @@ export const repository: RepositoryState = {
     return data || [];
   },
 
-  async getAllExpenses() {
+  async getAllWithdrawals() {
     if (!isSupabaseConfigured()) {
-      return demoStorage.getAllExpenses();
+      return demoStorage.getAllWithdrawals();
     }
     const supabase = createClient();
-    if (!supabase) return demoStorage.getAllExpenses();
+    if (!supabase) return demoStorage.getAllWithdrawals();
 
     const { data } = await supabase
-      .from('expenses')
+      .from('scheduled_withdrawals')
       .select('*')
-      .order('expense_date', { ascending: false });
+      .order('scheduled_date', { ascending: false });
 
     return data || [];
+  },
+
+  async getScheduledWithdrawals() {
+    if (!isSupabaseConfigured()) {
+      return demoStorage.getScheduledWithdrawals();
+    }
+    const supabase = createClient();
+    if (!supabase) return demoStorage.getScheduledWithdrawals();
+
+    const { data } = await supabase
+      .from('scheduled_withdrawals')
+      .select('*')
+      .in('status', ['Pwograme', 'An Atant'])
+      .order('scheduled_date', { ascending: true });
+
+    return data || [];
+  },
+
+  async getAllExpenses() {
+    return demoStorage.getAllExpenses();
   },
 
   async getAllAuditLogs() {
@@ -204,6 +270,14 @@ export const repository: RepositoryState = {
     }
     const supabase = createClient();
     if (!supabase) return demoStorage.submitContribution(data);
+
+    // Validation: min R$ 10,00
+    if (data.amount_centavos < 1000) {
+      return {
+        submission: null,
+        error: 'Kontribisyon an dwe omwen R$ 10,00.',
+      };
+    }
 
     // Check duplicate
     const { data: existing } = await supabase
@@ -250,7 +324,6 @@ export const repository: RepositoryState = {
     const supabase = createClient();
     if (!supabase) return demoStorage.approveSubmission(submissionId, adminId);
 
-    // Call atomic RPC stored procedure
     const { error } = await supabase.rpc('approve_contribution', {
       p_submission_id: submissionId,
       p_admin_id: adminId,
@@ -281,30 +354,72 @@ export const repository: RepositoryState = {
     return { success: true };
   },
 
-  async recordExpense(data) {
+  async scheduleWithdrawal(data) {
     if (!isSupabaseConfigured()) {
-      return demoStorage.recordExpense(data);
+      return demoStorage.scheduleWithdrawal(data);
     }
     const supabase = createClient();
-    if (!supabase) return demoStorage.recordExpense(data);
+    if (!supabase) return demoStorage.scheduleWithdrawal(data);
 
     const { data: inserted, error } = await supabase
-      .from('expenses')
+      .from('scheduled_withdrawals')
       .insert({
-        amount_centavos: data.amount_centavos,
-        expense_date: data.expense_date,
         description: data.description,
-        category: data.category,
-        reference_note: data.reference_note,
-        authorized_by: data.admin_id,
+        amount_centavos: data.amount_centavos,
+        scheduled_date: data.scheduled_date,
+        scheduled_time: data.scheduled_time,
+        note: data.note,
+        status: 'Pwograme',
+        created_by: data.admin_id,
       })
       .select()
       .single();
 
     if (error) {
-      return { expense: null, error: error.message };
+      return { withdrawal: null, error: error.message };
     }
-    return { expense: inserted };
+    return { withdrawal: inserted };
+  },
+
+  async executeWithdrawal(withdrawalId, adminId) {
+    if (!isSupabaseConfigured()) {
+      return demoStorage.executeWithdrawal(withdrawalId, adminId);
+    }
+    const supabase = createClient();
+    if (!supabase) return demoStorage.executeWithdrawal(withdrawalId, adminId);
+
+    const { error } = await supabase.rpc('execute_scheduled_withdrawal', {
+      p_withdrawal_id: withdrawalId,
+      p_admin_id: adminId,
+    });
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+    return { success: true };
+  },
+
+  async cancelWithdrawal(withdrawalId, adminId, reason) {
+    if (!isSupabaseConfigured()) {
+      return demoStorage.cancelWithdrawal(withdrawalId, adminId, reason);
+    }
+    const supabase = createClient();
+    if (!supabase) return demoStorage.cancelWithdrawal(withdrawalId, adminId, reason);
+
+    const { error } = await supabase.rpc('cancel_scheduled_withdrawal', {
+      p_withdrawal_id: withdrawalId,
+      p_admin_id: adminId,
+      p_reason: reason,
+    });
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+    return { success: true };
+  },
+
+  async recordExpense(data) {
+    return demoStorage.recordExpense(data);
   },
 
   async recordDirectContribution(data) {

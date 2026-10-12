@@ -1,29 +1,48 @@
 # Sistèm Jesyon Kontribisyon Chofè Legliz (Brezil)
-### Church Drivers Contribution Management System
+### Church Drivers Contribution Management System — Fintech Banking Redesign
 
-Platfòm jesyon ak transparans finansye pou yon gwoup chofè legliz nan Brezil. Chak chofè kontribye **R$ 10,00** pou chak jou li travay pou sipòte travay ak misyon legliz la.
+Platfòm jesyon ak transparans finansye pou yon gwoup chofè legliz nan Brezil, konstwi avèk yon konsepsyon dijital bankè kalite siperyè (style Nubank, senp, pwòp, ak konfyans total).
 
 > **Enpòtan**: Tout entèfas itilizatè a ekri an **Kreyòl Ayisyen**, epi tout montan yo afiche nan monnen **Real Brezilyen (BRL)** sou fòma `R$ 10,00`.
 
 ---
 
-## 1. Prensip ak Règ Finansye
+## 1. Prensip ak Règ Finansye ki Mizajou
 
-1. **Règ Kontribisyon an**: Yon chofè bay R$ 10,00 sèlman pou jou li te travay reyèlman. Si yon chofè pa travay yon jou, li pa dwe anyen. Pa gen dèt otomatik oswa penalite.
-2. **Sekirite ak Transparans**: Lè yon chofè soumèt yon kontribisyon, li antre nan eta `An Atant`. Li pa chanje balans ofisyèl kès la jiskaske trezorye/administratè a verifye epi apwouve li.
-3. **Kalkil Egzat (Zero Flotan)**: Tout kalkil fèt an santim (centavos) pou elimine erè awondisman (1000 centavos = R$ 10,00).
-4. **Idempotans & Tras Odit**: Yon kontribisyon pa ka apwouve de fwa. Tout apwobasyon, refi, ak depans anrejistre nan yon rejis odit enchanjab.
+1. **Règ Kontribisyon an (Minimòm R$ 10,00)**: 
+   - Chak chofè bay yon **minimòm R$ 10,00** pou chak jou li te travay reyèlman.
+   - Chofè a lib pou kontribye plis pase R$ 10,00 (egzanp: R$ 15,00, R$ 20,00, R$ 50,00, R$ 100,00).
+   - Nenpòt kontribisyon ki anba R$ 10,00 ap rejte otomatikman avèk mesaj: *"Kontribisyon an dwe omwen R$ 10,00."*
+   - Si yon chofè pa travay yon jou, li pa dwe anyen. Pa gen dèt otomatik oswa penalite.
+
+2. **Balans Disponib Dabò (Balance First)**:
+   - Balans disponib kès la se eleman ki pi vizib e dominan sou paj akèy la.
+   - Anba balans lan gen sèlman de (2) endikatè konpak: **"Total Kontribisyon"** ak **"Total Retrè"**.
+   - Fòmil ofisyèl la:
+     $$\text{Balans Disponib} = \text{Balans Inisyal (0)} + \text{Kontribisyon Apwouve} - \text{Retrè Egzekite}$$
+
+3. **Sistèm Retrè Pwograme (Ranplase Jesyon Depans)**:
+   - Tout fonksyonalite depans retire nèt nan entèfas la.
+   - Yo ranplase pa yon sistèm **Retrè Pwograme** (`/admin/retre`).
+   - Yon retrè pwograme **pa diminye balans lan touswit**. Li afiche kòm yon angajman transparan.
+   - Sistèm nan kalkile yon pwojeksyon: 
+     $$\text{Balans Apre Retrè (Pwojeksyon)} = \text{Balans Disponib} - \text{Retrè Pwograme}$$
+   - Se sèlman lè trezorye a verifye epi klike **"Egzekite Retrè"** montan an retire yon sèl fwa sou balans lan.
+   - Administratè ka anile yon retrè anvan li egzekite avèk yon rezon valab san sa pa touche balans lan.
+
+4. **Kalkil Egzat (Zero Flotan)**:
+   - Tout montan trete an santim (centavos) antye (1000 centavos = R$ 10,00) pou elimine nenpòt erè aritmetik.
 
 ---
 
 ## 2. Teknoloji Yo Itilize (Tech Stack)
 
 - **Next.js 16** (App Router ak TypeScript)
-- **Tailwind CSS v4** (Aparans pwòp, modèn, mobil-dabò)
+- **Tailwind CSS v4** (Konsepsyon bankè modèn, mobil-dabò)
 - **Supabase** (PostgreSQL, Row Level Security, Auth, Realtime)
-- **Zod** (Validasyon fòmilè ak mesaj Kreyòl)
-- **Vitest & Testing Library** (17 senaryo tès otomatik)
-- **Lucide React** (Ikon grafik modèn)
+- **Zod** (Validasyon fòmilè an Kreyòl Ayisyen)
+- **Vitest & Testing Library** (20 senaryo tès akseptasyon otomatik)
+- **Lucide React** (Ikonografi konsistan ak elegant)
 
 ---
 
@@ -40,10 +59,7 @@ Platfòm jesyon ak transparans finansye pou yon gwoup chofè legliz nan Brezil. 
 ### A. Telechaje ak Enstale Depandans yo
 
 ```bash
-# Ale nan dosye pwojè a
 cd kontribisyon
-
-# Enstale pake yo
 npm install
 ```
 
@@ -59,28 +75,45 @@ Ouvri navigatè ou sou: **[http://localhost:3000](http://localhost:3000)**
 
 Nan banyè jòn ki anwo a, ou ka:
 - Chanje wòl ant **Chofè** (*Jean Baptiste Pierre*) ak **Trezorye / Admin** (*Frantz Augustin*).
-- Teste soumèt kontribisyon, apwouve yo, anrejistre depans, ak konsilte rapò yo.
-- Klike **Reyinisyalize** pou remete done tès yo a zewo nenpòt lè.
+- Teste soumèt kontribisyon varyab (R$ 10, R$ 20, R$ 50), apwouve yo, pwograme retrè, egzekite yo, epi swiv pwojeksyon balans lan.
 
 ---
 
-## 5. Kijan pou Kouri Tès Otomatik yo
-
-Pwojè a gen 17 senaryo tès ki teste tout workflow la (kreyasyon kont, soumisyon R$ 10,00, apwobasyon idanpotan, izolasyon done, sekirite RLS, refi, ak fòma BRL):
+## 5. Kijan pou Kouri 20 Tès Akseptasyon yo
 
 ```bash
-# Kouri tout tès yo yon sèl fwa
+# Kouri tout 20 tès yo yon sèl fwa
 npm run test
 
 # Kouri tès yo an mòd veye (watch mode)
 npm run test:watch
 ```
 
+Tout 20 tès pase avèk siksè:
+1. Balans disponib kalkile kòrèkteman (Kontribisyon - Retrè)
+2. Jesyon depans retire epi ranplase pa retrè pwograme
+3. Chofè ka soumèt R$ 10,00
+4. Chofè ka soumèt plis pase R$ 10,00 (R$ 15, R$ 20, R$ 50, R$ 100)
+5. Kontribisyon anba R$ 10,00 rejte avèk mesaj kreyòl
+6. Soumisyon an atant pa chanje balans lan
+7. Apwobasyon ogmante balans lan yon sèl fwa (idempotans)
+8. Pwograme retrè pa diminye balans lan touswit (pwojeksyon separe)
+9. Retrè pwograme parèt nan lis k ap vini yo
+10. Egzekite retrè diminye balans lan yon sèl fwa egzakteman
+11. Anile retrè pa chanje balans lan
+12. Chofè pa ka egzekite oswa anile retrè
+13. Chofè pa ka apwouve kontribisyon
+14. Kalkil an santim antye san erè flotan
+15. Tèks ak validasyon an Kreyòl Ayisyen
+16. Fòma Real Brezilyen (BRL: R$ 10,00)
+17. Idempotans evènman an tan reyèl
+18. Istwa tranzaksyon inifye konpak (apwouve ak egzekite)
+19. Konsèvasyon done istorik
+20. Fòmil pwojeksyon kalkile kòrèkteman
+
 ---
 
 ## 6. Kijan pou Fè Konpilasyon Pwodiksyon (Build)
-
-Pou verifye si pa gen okenn erè TypeScript oswa wout Next.js:
 
 ```bash
 npm run build
@@ -91,9 +124,7 @@ npm run start
 
 ## 7. Entegrasyon Supabase (Faz 2)
 
-Lè ou pare pou konekte aplikasyon an ak yon bazdone Supabase reyèl:
-
-### A. Kreye Fichye `.env.local`
+### A. Fichye `.env.local`
 
 Kopye varyab ki nan `.env.example`:
 
@@ -105,59 +136,28 @@ SUPABASE_SERVICE_ROLE_KEY=your-service-role-key-here
 
 ### B. Aplike Migrasyon SQL la
 
-1. Ale nan Supabase Dashboard ou nan seksyon **SQL Editor**.
-2. Louvri fichye a: `supabase/migrations/20261012000000_church_drivers_schema.sql`.
-3. Kouri tout kòd SQL la. Sa pral kreye:
-   - Tablo `profiles`, `contribution_submissions`, `expenses`, `financial_transactions`, `audit_logs`.
-   - RLS (Row Level Security) pou pwoteje dosye prive ak resi.
-   - Pwosedi atomik `approve_contribution` ak `reject_contribution`.
-   - Vwa piblik `public_financial_records` ki kache imèl ak enfòmasyon sekrè.
-
-### C. Kijan pou Kreye Premye Administratè a (Trezorye) San Danje
-
-Pou sekirite, itilizatè yo pa ka mete tèt yo administratè nan fòmilè a. Pou aktive premye administratè a:
-
-1. Kreye yon kont nòmal nan aplikasyon an nan paj `/auth/register` (egzanp: `pastè.frantz@legliz.com`).
-2. Ale nan **Supabase Dashboard > SQL Editor** epi egzekite kòmand sa a:
-
-```sql
-UPDATE public.profiles
-SET role = 'admin'
-WHERE email = 'pastè.frantz@legliz.com';
-```
-
-Kounye a, kont sa a gen tout otorizasyon pou apwouve kontribisyon, anrejistre depans, epi jere manm yo.
+Louvri `supabase/migrations/20261012000000_church_drivers_schema.sql` nan Supabase SQL Editor:
+- Kreye tablo `scheduled_withdrawals` ak prezèvasyon done istorik `expenses`.
+- Pwosedi atomik `execute_scheduled_withdrawal` ak `approve_contribution`.
+- Kontwòl RLS konplè ak piblikasyon Realtime.
 
 ---
 
-## 8. Deplwaman sou Vercel
+## 8. Lis Wout Aplikasyon an
 
-1. Pouse kòd la sou yon depo GitHub prive oswa piblik:
-   ```bash
-   git add .
-   git commit -m "feat: sistèm jesyon kontribisyon chofè legliz"
-   git remote add origin https://github.com/username/kontribisyon.git
-   git push -u origin main
-   ```
-2. Ale sou [Vercel](https://vercel.com) epi klike **Add New Project**.
-3. Enpòte depo GitHub `kontribisyon` an.
-4. Nan seksyon **Environment Variables**, ajoute varyab sa yo:
-   - `NEXT_PUBLIC_SUPABASE_URL`
-   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-   - `SUPABASE_SERVICE_ROLE_KEY` (si ou itilize server actions espesyal)
-5. Klike **Deploy**.
-
----
-
-## 9. Lis Kòmand Prensipal yo
-
-| Kòmand | Deskripsyon |
-|---|---|
-| `npm run dev` | Kouri dev server lokalman sou pò 3000 |
-| `npm run test` | Kouri tout 17 senaryo tès yo avèk Vitest |
-| `npm run build` | Bati aplikasyon an pou pwodiksyon |
-| `npm run start` | Demare sèvè pwodiksyon an apre build |
-| `npm run lint` | Verifye estanda kòd la avèk ESLint |
+| Wout | Wòl | Deskripsyon |
+|---|---|---|
+| `/` | Piblik | Balans Disponib dabò, Total Kontribisyon, Total Retrè, Tranzaksyon |
+| `/chofe` | Chofè | Salitasyon pèsonalize, kontribisyon pèsonèl, fil aktivite konpak |
+| `/chofe/soumet` | Chofè | Fòmilè kontribisyon (minimòm R$ 10,00, sipò pou montan siperyè) |
+| `/admin` | Admin | Tablo trezorye kalite bankè avèk bilan ak aksè rapid |
+| `/admin/atant` | Admin | Revize ak apwouve/refize kontribisyon an atant |
+| `/admin/retre` | Admin | Pwograme nouvo retrè, konfime egzekisyon, oswa anile retrè |
+| `/admin/manm` | Admin | Lis tout chofè ak total kontribisyon yo |
+| `/admin/rapo` | Admin | Bilan finansye ofisyèl ak opsyon pou enprime |
+| `/admin/odit` | Admin | Tras enchanjab tout operasyon finansye |
+| `/auth/login` | Tout | Koneksyon sekirize |
+| `/auth/register` | Tout | Enskripsyon chofè |
 
 ---
 
