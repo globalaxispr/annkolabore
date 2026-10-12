@@ -51,9 +51,24 @@ export default function LoginPage() {
         </div>
 
         {errorMsg && (
-          <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-            <span>{errorMsg}</span>
+          <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs space-y-2">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+              <span>{errorMsg}</span>
+            </div>
+            {errorMsg.includes('Vercel') && (
+              <div className="pt-2 border-t border-rose-200/80 text-[11px] text-rose-700 flex items-center justify-between">
+                <span>Tcheke estati koneksyon sèvè a:</span>
+                <a
+                  href="/api/supabase-config"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-bold underline text-rose-900 hover:text-black ml-1"
+                >
+                  Ouvri Rapò Diagnostik ↗
+                </a>
+              </div>
+            )}
           </div>
         )}
 

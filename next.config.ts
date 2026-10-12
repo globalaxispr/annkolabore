@@ -19,8 +19,30 @@ const cspHeader = `
   form-action 'self';
 `.replace(/\s{2,}/g, ' ').trim();
 
+const resolvedSupabaseUrl =
+  process.env.NEXT_PUBLIC_SUPABASE_URL ||
+  process.env.SUPABASE_URL ||
+  process.env.NEXT_PUBLIC_SUPABASE_PROJECT_URL ||
+  process.env.SUPABASE_PROJECT_URL ||
+  'https://rocarrtokwekcztczgfv.supabase.co';
+
+const resolvedSupabaseAnonKey =
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+  process.env.SUPABASE_ANON_KEY ||
+  process.env.SUPABASE_PUBLISHABLE_KEY ||
+  process.env.NEXT_PUBLIC_SUPABASE_KEY ||
+  process.env.SUPABASE_KEY ||
+  process.env.NEXT_PUBLIC_ANON_KEY ||
+  process.env.ANON_KEY ||
+  '';
+
 const nextConfig: NextConfig = {
   /* config options here */
+  env: {
+    NEXT_PUBLIC_SUPABASE_URL: resolvedSupabaseUrl,
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: resolvedSupabaseAnonKey,
+  },
   cacheComponents: true,
   partialPrefetching: true,
   turbopack: {

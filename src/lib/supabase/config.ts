@@ -105,10 +105,16 @@ export function getSupabaseConfig(): {
 
   const url = normalizeSupabaseUrl(rawUrl);
 
-  // Read Anon / Publishable Key
+  // Read Anon / Publishable Key from all standard naming conventions
   const envAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   const envPublishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-  const serverAnonKey = typeof window === 'undefined' ? (process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_PUBLISHABLE_KEY) : undefined;
+  const envSupabaseKey = process.env.NEXT_PUBLIC_SUPABASE_KEY;
+  const envAnon = process.env.NEXT_PUBLIC_ANON_KEY;
+
+  const serverAnonKey = typeof window === 'undefined' ? process.env.SUPABASE_ANON_KEY : undefined;
+  const serverPublishableKey = typeof window === 'undefined' ? process.env.SUPABASE_PUBLISHABLE_KEY : undefined;
+  const serverSupabaseKey = typeof window === 'undefined' ? process.env.SUPABASE_KEY : undefined;
+  const serverAnon = typeof window === 'undefined' ? process.env.ANON_KEY : undefined;
 
   let rawKey = '';
   let sourceKey: 'NEXT_PUBLIC_SUPABASE_ANON_KEY' | 'NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY' | 'SUPABASE_ANON_KEY' | 'RUNTIME_API' | 'none' = 'none';
@@ -119,8 +125,23 @@ export function getSupabaseConfig(): {
   } else if (envPublishableKey && envPublishableKey.trim()) {
     rawKey = envPublishableKey;
     sourceKey = 'NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY';
+  } else if (envSupabaseKey && envSupabaseKey.trim()) {
+    rawKey = envSupabaseKey;
+    sourceKey = 'NEXT_PUBLIC_SUPABASE_ANON_KEY';
+  } else if (envAnon && envAnon.trim()) {
+    rawKey = envAnon;
+    sourceKey = 'NEXT_PUBLIC_SUPABASE_ANON_KEY';
   } else if (serverAnonKey && serverAnonKey.trim()) {
     rawKey = serverAnonKey;
+    sourceKey = 'SUPABASE_ANON_KEY';
+  } else if (serverPublishableKey && serverPublishableKey.trim()) {
+    rawKey = serverPublishableKey;
+    sourceKey = 'NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY';
+  } else if (serverSupabaseKey && serverSupabaseKey.trim()) {
+    rawKey = serverSupabaseKey;
+    sourceKey = 'SUPABASE_ANON_KEY';
+  } else if (serverAnon && serverAnon.trim()) {
+    rawKey = serverAnon;
     sourceKey = 'SUPABASE_ANON_KEY';
   }
 
