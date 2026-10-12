@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { demoStorage } from '@/lib/demo-storage';
 import { repository } from '@/lib/repository';
 import { UserProfile, ContributionSubmission } from '@/lib/types';
 import { formatBRL, formatDateCreole } from '@/lib/formatters';

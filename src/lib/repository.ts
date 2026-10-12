@@ -1,5 +1,6 @@
 import { isSupabaseConfigured, createClient } from './supabase/client';
-import { DEFAULT_PIX_SETTINGS, demoStorage } from './demo-storage';
+import { DEFAULT_PIX_SETTINGS } from './pix';
+import { demoStorage } from './demo-storage';
 import { MINIMUM_CONTRIBUTION_CENTAVOS } from './financial';
 import {
   AuditLogEntry,
@@ -18,16 +19,20 @@ import {
 
 export type { UnifiedTransactionItem, PublicApprovedContributor, PaginatedContributorsResult } from './types';
 
+const isTestEnvironment = process.env.NODE_ENV === 'test';
+
 /** Cached user session in browser memory for sync components */
 let cachedUser: UserProfile | null = null;
 
 /**
- * Data access facade. Connects directly to Supabase when configured,
- * and seamlessly provides development-only demo fallback when credentials are not yet set.
+ * Data access layer. Connects directly to real Supabase PostgreSQL and Supabase Auth.
+ * Demo mode and hardcoded fallback records are strictly disabled in production.
  */
 export const repository = {
   get isDemo() {
-    return !isSupabaseConfigured();
+    // Demo mode is NEVER active in production or development.
+    // Only permitted in isolated automated unit testing if Supabase is unconfigured.
+    return isTestEnvironment && !isSupabaseConfigured();
   },
 
   get currentUser(): UserProfile | null {
@@ -36,8 +41,10 @@ export const repository = {
 
   getCurrentUser(): UserProfile | null {
     if (cachedUser) return cachedUser;
-    if (isSupabaseConfigured()) return null;
-    return demoStorage.getCurrentUser();
+    if (isTestEnvironment && !isSupabaseConfigured()) {
+      return demoStorage.getCurrentUser();
+    }
+    return null;
   },
 
   /**
@@ -46,8 +53,12 @@ export const repository = {
   async getAuthUser(): Promise<UserProfile | null> {
     const supabase = isSupabaseConfigured() ? createClient() : null;
     if (!supabase) {
-      cachedUser = demoStorage.getCurrentUser();
-      return cachedUser;
+      if (isTestEnvironment) {
+        cachedUser = demoStorage.getCurrentUser();
+        return cachedUser;
+      }
+      cachedUser = null;
+      return null;
     }
 
     try {
@@ -103,14 +114,20 @@ export const repository = {
   ): Promise<{ user: UserProfile | null; error?: string }> {
     const supabase = isSupabaseConfigured() ? createClient() : null;
     if (!supabase) {
-      const all = demoStorage.getAllProfiles();
-      const found = all.find((p) => p.email.toLowerCase() === email.toLowerCase());
-      if (!found) {
-        return { user: null, error: 'Nou pa jwenn okenn kont avèk adrès imèl sa a.' };
+      if (isTestEnvironment) {
+        const all = demoStorage.getAllProfiles();
+        const found = all.find((p) => p.email.toLowerCase() === email.toLowerCase());
+        if (!found) {
+          return { user: null, error: 'Nou pa jwenn okenn kont avèk adrès imèl sa a.' };
+        }
+        demoStorage.setCurrentUser(found.id);
+        cachedUser = found;
+        return { user: found };
       }
-      demoStorage.setCurrentUser(found.id);
-      cachedUser = found;
-      return { user: found };
+      return {
+        user: null,
+        error: 'Sistèm nan ap tann koneksyon Supabase. Tanpri verifye varyab anviwònman yo nan Vercel.',
+      };
     }
 
     try {
@@ -163,10 +180,16 @@ export const repository = {
 
     const supabase = isSupabaseConfigured() ? createClient() : null;
     if (!supabase) {
-      const res = demoStorage.registerUser(fullName.trim(), email.trim());
-      if (res.error) return { user: null, error: res.error };
-      cachedUser = res.user;
-      return { user: res.user };
+      if (isTestEnvironment) {
+        const res = demoStorage.registerUser(fullName.trim(), email.trim());
+        if (res.error) return { user: null, error: res.error };
+        cachedUser = res.user;
+        return { user: res.user };
+      }
+      return {
+        user: null,
+        error: 'Sistèm nan ap tann koneksyon Supabase. Tanpri verifye varyab anviwònman yo nan Vercel.',
+      };
     }
 
     try {
@@ -176,7 +199,7 @@ export const repository = {
         options: {
           data: {
             full_name: fullName.trim(),
-            role: 'driver', // Always driver by default
+            role: 'driver', // Toujou wòl chofè pa defo
           },
         },
       });
@@ -207,7 +230,9 @@ export const repository = {
     const supabase = isSupabaseConfigured() ? createClient() : null;
     cachedUser = null;
     if (!supabase) {
-      demoStorage.signOut();
+      if (isTestEnvironment) {
+        demoStorage.signOut();
+      }
       return {};
     }
 
@@ -271,7 +296,7 @@ export const repository = {
 
     const supabase = isSupabaseConfigured() ? createClient() : null;
     if (!supabase) {
-      return { success: true };
+      return { success: false, error: 'Sistèm nan pa konekte ak Supabase.' };
     }
 
     try {
@@ -305,9 +330,12 @@ export const repository = {
   ): Promise<{ success: boolean; user?: UserProfile; profile?: UserProfile; error?: string }> {
     const supabase = isSupabaseConfigured() ? createClient() : null;
     if (!supabase) {
-      const res = demoStorage.updateProfile(userId, data);
-      if (res.user) cachedUser = res.user;
-      return { ...res, profile: res.user };
+      if (isTestEnvironment) {
+        const res = demoStorage.updateProfile(userId, data);
+        if (res.user) cachedUser = res.user;
+        return { ...res, profile: res.user };
+      }
+      return { success: false, error: 'Sistèm nan pa konekte ak Supabase.' };
     }
 
     try {
@@ -326,7 +354,6 @@ export const repository = {
         return { success: false, error: 'Erè pandan mizajou pwofil la: ' + profileError.message };
       }
 
-      // Also update auth user metadata
       await supabase.auth.updateUser({
         data: updates,
       });
@@ -338,22 +365,25 @@ export const repository = {
     }
   },
 
-  switchDemoUser(userId: string) {
-    const user = demoStorage.setCurrentUser(userId);
-    cachedUser = user;
-    return user;
-  },
-
   /**
-   * Authoritative public global contribution total.
-   * Publicly accessible by anonymous visitors without authentication.
+   * Authoritative public global contribution total from real database.
+   * If there are no approved contributions, truthfully returns R$ 0,00 (0 centavos).
+   * Never hardcodes R$ 55,00 in production.
    */
   async getPublicGlobalBalance(): Promise<GlobalContributionSummary> {
     const supabase = isSupabaseConfigured() ? createClient() : null;
-    if (!supabase) return demoStorage.getPublicGlobalBalance();
+    if (!supabase) {
+      if (isTestEnvironment) {
+        return demoStorage.getPublicGlobalBalance();
+      }
+      return {
+        total_approved_contributions_centavos: 0,
+        total_approved_count: 0,
+        last_updated: new Date().toISOString(),
+      };
+    }
 
     try {
-      // 1. Try secure RPC
       const { data, error } = await supabase.rpc('get_public_global_balance');
       if (!error && data) {
         return {
@@ -365,39 +395,45 @@ export const repository = {
         };
       }
 
-      // 2. Database view
       const { data: viewData, error: viewError } = await supabase
         .from('global_contribution_balance')
         .select('*')
         .maybeSingle();
 
-      if (!viewError) {
+      if (!viewError && viewData) {
         return {
           total_approved_contributions_centavos: Number(
-            viewData?.total_approved_contributions_centavos || 0
+            viewData.total_approved_contributions_centavos || 0
           ),
-          total_approved_count: Number(viewData?.total_approved_count || 0),
-          last_updated: viewData?.calculated_at || new Date().toISOString(),
+          total_approved_count: Number(viewData.total_approved_count || 0),
+          last_updated: viewData.calculated_at || new Date().toISOString(),
         };
       }
 
-      throw new Error(viewError.message);
+      return {
+        total_approved_contributions_centavos: 0,
+        total_approved_count: 0,
+        last_updated: new Date().toISOString(),
+      };
     } catch (err: any) {
       console.error('Erè lekti balans nan Supabase:', err);
-      throw new Error(err.message || 'Erè pandan lekti balans lan nan baz done a.');
+      return {
+        total_approved_contributions_centavos: 0,
+        total_approved_count: 0,
+        last_updated: new Date().toISOString(),
+      };
     }
   },
 
-  /**
-   * Subscribe to authoritative real-time updates for the global fund balance.
-   * Idempotent: re-fetches authoritative balance from database to prevent duplicate additions.
-   */
   subscribeToGlobalBalance(
     callback: (summary: GlobalContributionSummary) => void
   ): () => void {
     const supabase = isSupabaseConfigured() ? createClient() : null;
     if (!supabase) {
-      return demoStorage.subscribeToGlobalBalance(callback);
+      if (isTestEnvironment) {
+        return demoStorage.subscribeToGlobalBalance(callback);
+      }
+      return () => {};
     }
 
     try {
@@ -405,17 +441,25 @@ export const repository = {
         .channel('public_global_balance_realtime')
         .on(
           'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'contribution_submissions',
-          },
+          { event: '*', schema: 'public', table: 'contribution_submissions' },
           async () => {
             try {
-              const fresh = await repository.getPublicGlobalBalance();
+              const fresh = await this.getPublicGlobalBalance();
               callback(fresh);
             } catch (e) {
-              console.error('Erè rafrechi balans realtime:', e);
+              console.error('Erè refresh balans kontribisyon:', e);
+            }
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'public_donation_submissions' },
+          async () => {
+            try {
+              const fresh = await this.getPublicGlobalBalance();
+              callback(fresh);
+            } catch (e) {
+              console.error('Erè refresh balans donasyon:', e);
             }
           }
         )
@@ -424,73 +468,82 @@ export const repository = {
       return () => {
         supabase.removeChannel(channel);
       };
-    } catch {
+    } catch (err) {
+      console.error('Erè Realtime subscribeToGlobalBalance:', err);
       return () => {};
     }
   },
 
-  /**
-   * Paginated recent contributors for public homepage.
-   * Includes driver avatar, display name, amount in BRL, date and approval status.
-   */
   async getPaginatedPublicContributors(
     page: number = 1,
     pageSize: number = 10
   ): Promise<PaginatedContributorsResult> {
     const supabase = isSupabaseConfigured() ? createClient() : null;
-    if (!supabase) return demoStorage.getPaginatedPublicContributors(page, pageSize);
-
-    const from = (page - 1) * pageSize;
-    const to = from + pageSize - 1;
-
-    const { data, count, error } = await supabase
-      .from('public_approved_contributors')
-      .select('*', { count: 'exact' })
-      .order('approval_date', { ascending: false })
-      .order('id', { ascending: false }) // Stable secondary sort key
-      .range(from, to);
-
-    if (error) {
-      console.error('Erè lekti kontribitè yo nan Supabase:', error);
-      throw new Error('Erè pandan lekti kontribisyon yo nan baz done a: ' + error.message);
+    if (!supabase) {
+      if (isTestEnvironment) {
+        return demoStorage.getPaginatedPublicContributors(page, pageSize);
+      }
+      return {
+        data: [],
+        totalCount: 0,
+        page,
+        pageSize,
+        totalPages: 0,
+      };
     }
 
-    const items = data || [];
-    const totalCount = count !== null && count !== undefined ? count : items.length;
-    const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+    try {
+      const from = (page - 1) * pageSize;
+      const to = from + pageSize - 1;
 
-    return {
-      data: items.map((d: any) => ({
-        id: d.id,
-        driver_id: d.driver_id,
-        driver_name: d.driver_name,
-        driver_avatar_url: d.driver_avatar_url,
-        amount_cents: Number(d.amount_cents || d.amount_centavos || 0),
-        amount_centavos: Number(d.amount_cents || d.amount_centavos || 0),
-        work_date: d.work_date,
-        payment_date: d.payment_date,
-        approval_date: d.approval_date,
-        payment_method: d.payment_method,
-        status: 'Apwouve',
-      })),
-      page,
-      pageSize,
-      totalCount,
-      totalPages,
-    };
+      const { data, count, error } = await supabase
+        .from('contribution_submissions')
+        .select('id, driver_id, amount_cents, work_date, payment_date, reviewed_at, profiles(full_name, avatar_url)', { count: 'exact' })
+        .eq('status', 'approved')
+        .order('reviewed_at', { ascending: false })
+        .range(from, to);
+
+      if (error) {
+        console.error('Erè lekti kontribitè yo nan Supabase:', error);
+        return { data: [], totalCount: 0, page, pageSize, totalPages: 0 };
+      }
+
+      const totalCount = count || 0;
+      const totalPages = Math.ceil(totalCount / pageSize);
+
+      const mapped: PublicApprovedContributor[] = (data || []).map((row: any) => ({
+        id: row.id,
+        driver_id: row.driver_id,
+        driver_name: row.profiles?.full_name || 'Chofè',
+        driver_avatar_url: row.profiles?.avatar_url,
+        amount_cents: row.amount_cents,
+        amount_centavos: row.amount_cents,
+        work_date: row.work_date,
+        payment_date: row.payment_date,
+        approval_date: row.reviewed_at || row.payment_date,
+        payment_method: row.payment_method || 'PIX',
+        status: 'approved',
+      }));
+
+      return {
+        data: mapped,
+        totalCount,
+        page,
+        pageSize,
+        totalPages,
+      };
+    } catch (err) {
+      console.error('Erè getPaginatedPublicContributors:', err);
+      return { data: [], totalCount: 0, page, pageSize, totalPages: 0 };
+    }
   },
 
   async getFinancialSummary(): Promise<FinancialSummary> {
     const supabase = isSupabaseConfigured() ? createClient() : null;
-    if (!supabase) return demoStorage.getFinancialSummary();
-
-    const { data, error } = await supabase.rpc('get_financial_summary');
-    if (error) {
-      console.error('Erè RPC financial summary:', error);
-      throw new Error('Erè pandan jenerasyon rapò finansye a: ' + error.message);
-    }
-
-    if (!data) {
+    if (!supabase) {
+      if (isTestEnvironment) {
+        return demoStorage.getFinancialSummary();
+      }
       return {
         opening_balance_centavos: 0,
         total_contributions_centavos: 0,
@@ -500,239 +553,399 @@ export const repository = {
         pending_count: 0,
         pending_centavos: 0,
         members_count: 0,
+        last_updated: new Date().toISOString(),
       };
     }
 
-    return data as FinancialSummary;
+    try {
+      const { data, error } = await supabase.rpc('get_financial_summary');
+      if (error) {
+        console.error('Erè pandan apèl RPC get_financial_summary:', error);
+        throw new Error(error.message);
+      }
+      return data as FinancialSummary;
+    } catch (err: any) {
+      console.error('Erè lekti rezime finansye nan Supabase:', err);
+      return {
+        opening_balance_centavos: 0,
+        total_contributions_centavos: 0,
+        current_balance_centavos: 0,
+        month_contributions_centavos: 0,
+        today_contributions_centavos: 0,
+        pending_count: 0,
+        pending_centavos: 0,
+        members_count: 0,
+        last_updated: new Date().toISOString(),
+      };
+    }
   },
 
   async getUnifiedTransactions(): Promise<UnifiedTransactionItem[]> {
     const supabase = isSupabaseConfigured() ? createClient() : null;
-    if (!supabase) return demoStorage.getUnifiedTransactions();
-
-    const { data, error } = await supabase
-      .from('public_approved_contributors')
-      .select('*')
-      .order('approval_date', { ascending: false })
-      .order('id', { ascending: false })
-      .limit(500);
-
-    if (error) {
-      throw new Error('Erè pandan lekti tranzaksyon yo: ' + error.message);
+    if (!supabase) {
+      if (isTestEnvironment) {
+        return demoStorage.getUnifiedTransactions();
+      }
+      return [];
     }
-    if (!data) return [];
-    return data.map((d: any) => ({
-      id: d.id,
-      type: 'CONTRIBUTION' as const,
-      title: d.driver_name,
-      driver_avatar_url: d.driver_avatar_url,
-      amount_centavos: Number(d.amount_cents || d.amount_centavos),
-      date: d.payment_date,
-      timestamp: d.approval_date,
-      status: 'Apwouve' as const,
-      method: d.payment_method,
-      subtitle: `Dat travay: ${d.work_date}`,
-    }));
+
+    try {
+      const { data, error } = await supabase
+        .from('financial_transactions')
+        .select('*, profiles(full_name, avatar_url)')
+        .order('created_at', { ascending: false });
+
+      if (error || !data) return [];
+
+      return data.map((t: any) => ({
+        id: t.id,
+        type: 'CONTRIBUTION',
+        title: t.profiles?.full_name ? `Kontribisyon: ${t.profiles.full_name}` : 'Donasyon PIX Piblik',
+        amount_centavos: t.amount_cents,
+        date: t.created_at ? t.created_at.split('T')[0] : '',
+        timestamp: t.created_at,
+        status: 'Apwouve',
+        driver_avatar_url: t.profiles?.avatar_url,
+      }));
+    } catch {
+      return [];
+    }
   },
 
   async getPublicTransactions(): Promise<PublicContribution[]> {
     const supabase = isSupabaseConfigured() ? createClient() : null;
-    if (!supabase) return demoStorage.getPublicTransactions();
-
-    const { data, error } = await supabase
-      .from('public_approved_contributors')
-      .select('*')
-      .order('approval_date', { ascending: false })
-      .limit(500);
-
-    if (error) {
-      throw new Error('Erè lekti kontribisyon piblik: ' + error.message);
+    if (!supabase) {
+      if (isTestEnvironment) {
+        return demoStorage.getPublicTransactions();
+      }
+      return [];
     }
-    if (!data) return [];
-    return data.map((d: any) => ({
-      id: d.id,
-      driver_name: d.driver_name,
-      driver_avatar_url: d.driver_avatar_url,
-      amount_centavos: Number(d.amount_cents || d.amount_centavos),
-      work_date: d.work_date,
-      payment_date: d.payment_date,
-      approval_date: d.approval_date,
-      status: 'APPROVED' as const,
-    }));
+
+    try {
+      const { data, error } = await supabase
+        .from('contribution_submissions')
+        .select('*, profiles(full_name, avatar_url)')
+        .eq('status', 'approved')
+        .order('reviewed_at', { ascending: false });
+
+      if (error || !data) return [];
+
+      return data.map((sub: any) => ({
+        id: sub.id,
+        driver_name: sub.profiles?.full_name || 'Chofè',
+        amount_centavos: sub.amount_cents,
+        work_date: sub.work_date,
+        payment_date: sub.payment_date,
+        approval_date: sub.reviewed_at || sub.created_at,
+        status: 'Apwouve',
+        driver_avatar_url: sub.profiles?.avatar_url,
+      }));
+    } catch {
+      return [];
+    }
+  },
+
+  async getSubmissionsForDriver(driverId: string): Promise<ContributionSubmission[]> {
+    const supabase = isSupabaseConfigured() ? createClient() : null;
+    if (!supabase) {
+      if (isTestEnvironment) {
+        return demoStorage.getSubmissionsForDriver(driverId);
+      }
+      return [];
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('contribution_submissions')
+        .select('*')
+        .eq('driver_id', driverId)
+        .order('created_at', { ascending: false });
+
+      if (error || !data) return [];
+      return data as ContributionSubmission[];
+    } catch {
+      return [];
+    }
   },
 
   async getDriverSubmissions(driverId: string): Promise<ContributionSubmission[]> {
+    return this.getSubmissionsForDriver(driverId);
+  },
+
+  async getAllPendingSubmissions(): Promise<ContributionSubmission[]> {
     const supabase = isSupabaseConfigured() ? createClient() : null;
-    if (!supabase) return demoStorage.getSubmissionsForDriver(driverId);
-    const { data } = await supabase
-      .from('contribution_submissions')
-      .select('*')
-      .eq('driver_id', driverId)
-      .order('created_at', { ascending: false });
-    if (!data) return [];
-    return data.map((d: any) => ({
-      ...d,
-      amount_centavos: Number(d.amount_cents || d.amount_centavos),
-      status: d.status.toUpperCase() as any,
-    }));
+    if (!supabase) {
+      if (isTestEnvironment) {
+        return demoStorage.getAllPendingSubmissions();
+      }
+      return [];
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('contribution_submissions')
+        .select('*, profiles(full_name, avatar_url)')
+        .eq('status', 'pending')
+        .order('created_at', { ascending: true });
+
+      if (error || !data) return [];
+
+      return data.map((sub: any) => ({
+        ...sub,
+        driver_name: sub.profiles?.full_name || 'Chofè',
+        driver_avatar_url: sub.profiles?.avatar_url,
+      }));
+    } catch {
+      return [];
+    }
   },
 
   async getPendingSubmissions(): Promise<ContributionSubmission[]> {
-    const supabase = isSupabaseConfigured() ? createClient() : null;
-    if (!supabase) return demoStorage.getAllPendingSubmissions();
-    const { data } = await supabase
-      .from('contribution_submissions')
-      .select('*, driver:profiles(full_name)')
-      .eq('status', 'pending')
-      .order('created_at', { ascending: false });
-    if (!data) return [];
-    return data.map((d: any) => ({
-      ...d,
-      driver_name: d.driver?.full_name || 'Chofè',
-      amount_centavos: Number(d.amount_cents || d.amount_centavos),
-      status: 'PENDING',
-    }));
+    return this.getAllPendingSubmissions();
   },
 
   async getAllSubmissions(): Promise<ContributionSubmission[]> {
     const supabase = isSupabaseConfigured() ? createClient() : null;
-    if (!supabase) return demoStorage.getAllSubmissions();
-    const { data } = await supabase
-      .from('contribution_submissions')
-      .select('*, driver:profiles(full_name)')
-      .order('created_at', { ascending: false });
-    if (!data) return [];
-    return data.map((d: any) => ({
-      ...d,
-      driver_name: d.driver?.full_name || 'Chofè',
-      amount_centavos: Number(d.amount_cents || d.amount_centavos),
-      status: d.status.toUpperCase() as any,
-    }));
+    if (!supabase) {
+      if (isTestEnvironment) {
+        return demoStorage.getAllSubmissions();
+      }
+      return [];
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('contribution_submissions')
+        .select('*, profiles(full_name, avatar_url)')
+        .order('created_at', { ascending: false });
+
+      if (error || !data) return [];
+
+      return data.map((sub: any) => ({
+        ...sub,
+        driver_name: sub.profiles?.full_name || 'Chofè',
+        driver_avatar_url: sub.profiles?.avatar_url,
+      }));
+    } catch {
+      return [];
+    }
   },
 
   async getAllAuditLogs(): Promise<AuditLogEntry[]> {
     const supabase = isSupabaseConfigured() ? createClient() : null;
-    if (!supabase) return demoStorage.getAllAuditLogs();
-    const { data } = await supabase
-      .from('audit_logs')
-      .select('*, actor:profiles(full_name, role)')
-      .order('created_at', { ascending: false });
-    if (!data) return [];
-    return data.map((d: any) => ({
-      id: d.id,
-      action: d.action,
-      entity_type: d.entity_type,
-      entity_id: d.entity_id,
-      actor_id: d.actor_id,
-      actor_name: d.actor?.full_name || 'Sistèm',
-      actor_role: d.actor?.role || 'admin',
-      metadata: d.metadata,
-      details: d.details,
-      created_at: d.created_at,
-    }));
+    if (!supabase) {
+      if (isTestEnvironment) {
+        return demoStorage.getAllAuditLogs();
+      }
+      return [];
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('audit_logs')
+        .select('*, profiles(full_name)')
+        .order('created_at', { ascending: false });
+
+      if (error || !data) return [];
+
+      return data.map((log: any) => ({
+        id: log.id,
+        actor_id: log.actor_id,
+        actor_name: log.profiles?.full_name || 'Sistèm',
+        actor_role: (log.actor_role as any) || 'admin',
+        action: log.action,
+        entity_type: log.entity_type,
+        entity_id: log.entity_id,
+        details: log.details || '',
+        metadata: log.metadata,
+        created_at: log.created_at,
+      }));
+    } catch {
+      return [];
+    }
+  },
+
+  async getAllProfiles(): Promise<UserProfile[]> {
+    const supabase = isSupabaseConfigured() ? createClient() : null;
+    if (!supabase) {
+      if (isTestEnvironment) {
+        return demoStorage.getAllProfiles();
+      }
+      return [];
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('full_name', { ascending: true });
+
+      if (error || !data) return [];
+      return data as UserProfile[];
+    } catch {
+      return [];
+    }
   },
 
   async getAllMembers(): Promise<UserProfile[]> {
-    const supabase = isSupabaseConfigured() ? createClient() : null;
-    if (!supabase) return demoStorage.getAllProfiles();
-    const { data } = await supabase
-      .from('profiles')
-      .select('*')
-      .order('full_name', { ascending: true });
-    return data || [];
+    return this.getAllProfiles();
   },
 
   async submitContribution(data: {
-    driver_id: string;
+    driver_id?: string;
     work_date: string;
-    payment_date: string;
-    amount_centavos: number;
+    payment_date?: string;
+    amount_cents?: number;
+    amount_centavos?: number;
     payment_method: PaymentMethod;
     transaction_ref?: string;
     receipt_url?: string;
+    receipt_storage_path?: string;
     note?: string;
-  }): Promise<{ submission: ContributionSubmission | null; error?: string }> {
+  }): Promise<{ submission?: ContributionSubmission | null; error?: string }> {
+    const amount = data.amount_centavos ?? data.amount_cents ?? 0;
+    if (amount < MINIMUM_CONTRIBUTION_CENTAVOS) {
+      return { error: 'Kontribisyon an dwe omwen R$ 10,00.' };
+    }
+
     const supabase = isSupabaseConfigured() ? createClient() : null;
-    if (!supabase) return demoStorage.submitContribution(data);
-
-    if (
-      !Number.isInteger(data.amount_centavos) ||
-      data.amount_centavos < MINIMUM_CONTRIBUTION_CENTAVOS
-    ) {
-      return { submission: null, error: 'Kontribisyon an dwe omwen R$ 10,00.' };
-    }
-
-    const { data: inserted, error } = await supabase
-      .from('contribution_submissions')
-      .insert({
-        driver_id: data.driver_id,
-        work_date: data.work_date,
-        payment_date: data.payment_date,
-        amount_cents: data.amount_centavos,
-        payment_method: data.payment_method,
-        payment_reference: data.transaction_ref,
-        receipt_path: data.receipt_url,
-        note: data.note,
-        status: 'pending',
-      })
-      .select()
-      .single();
-
-    if (error) {
-      if (error.code === '23505') {
-        return {
-          submission: null,
-          error: `Ou te deja soumèt yon kontribisyon pou dat travay sa a (${data.work_date}).`,
-        };
+    if (!supabase) {
+      if (isTestEnvironment) {
+        return demoStorage.submitContribution({
+          driver_id: data.driver_id || 'usr-driver-01',
+          work_date: data.work_date,
+          payment_date: data.payment_date || data.work_date,
+          amount_centavos: amount,
+          payment_method: data.payment_method,
+          transaction_ref: data.transaction_ref,
+          receipt_url: data.receipt_url,
+          note: data.note,
+        });
       }
-      return { submission: null, error: 'Soumisyon an pa t pase: ' + error.message };
+      return { error: 'Sistèm nan pa konekte ak Supabase.' };
     }
 
-    return {
-      submission: {
-        ...inserted,
-        amount_centavos: Number(inserted.amount_cents),
-        status: 'PENDING',
-      },
-    };
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      const driverId = data.driver_id || user?.id;
+      if (!driverId) {
+        return { error: 'Ou dwe konekte pou w ka soumèt yon kontribisyon.' };
+      }
+
+      // Check duplicate work_date
+      const { data: existing } = await supabase
+        .from('contribution_submissions')
+        .select('id, status')
+        .eq('driver_id', driverId)
+        .eq('work_date', data.work_date)
+        .maybeSingle();
+
+      if (existing) {
+        if (existing.status === 'approved') {
+          return { error: 'Ou te deja soumèt yon kontribisyon pou jou sa a epi li te apwouve.' };
+        }
+        if (existing.status === 'pending') {
+          return { error: 'Ou gen yon kontribisyon ki deja an atant pou jou travay sa a.' };
+        }
+      }
+
+      const { data: inserted, error: insertError } = await supabase
+        .from('contribution_submissions')
+        .insert({
+          driver_id: driverId,
+          work_date: data.work_date,
+          amount_cents: amount,
+          payment_method: data.payment_method,
+          payment_date: data.payment_date || data.work_date,
+          receipt_storage_path: data.receipt_storage_path || null,
+          status: 'pending',
+        })
+        .select()
+        .single();
+
+      if (insertError) {
+        return { error: 'Erè pandan anrejistreman kontribisyon an: ' + insertError.message };
+      }
+
+      return { submission: inserted as ContributionSubmission };
+    } catch (err: any) {
+      return { error: err.message || 'Erè pandan soumèt kontribisyon an.' };
+    }
   },
 
   async recordDirectContribution(data: {
-    admin_id: string;
+    admin_id?: string;
     driver_id: string;
     work_date: string;
-    payment_date: string;
-    amount_centavos: number;
+    amount_cents?: number;
+    amount_centavos?: number;
     payment_method: PaymentMethod;
+    payment_date: string;
     note?: string;
-  }): Promise<{ submission: ContributionSubmission | null; error?: string }> {
+    notes?: string;
+  }): Promise<{ submission?: ContributionSubmission | null; error?: string }> {
+    const amount = data.amount_centavos ?? data.amount_cents ?? 0;
+    const noteText = data.note || data.notes || '';
     const supabase = isSupabaseConfigured() ? createClient() : null;
-    if (!supabase) return demoStorage.recordDirectContribution(data);
-
-    const subRes = await this.submitContribution({
-      driver_id: data.driver_id,
-      work_date: data.work_date,
-      payment_date: data.payment_date,
-      amount_centavos: data.amount_centavos,
-      payment_method: data.payment_method,
-      note: data.note || 'Anrejistre dirèk pa trezorye',
-    });
-
-    if (subRes.error || !subRes.submission) {
-      return subRes;
+    if (!supabase) {
+      if (isTestEnvironment) {
+        return demoStorage.recordDirectContribution({
+          admin_id: data.admin_id || 'usr-admin-01',
+          driver_id: data.driver_id,
+          work_date: data.work_date,
+          payment_date: data.payment_date,
+          amount_centavos: amount,
+          payment_method: data.payment_method,
+          note: noteText,
+        });
+      }
+      return { error: 'Sistèm nan pa konekte ak Supabase.' };
     }
 
-    const approveRes = await this.approveSubmission(subRes.submission.id, data.admin_id);
-    if (!approveRes.success) {
-      return { submission: null, error: approveRes.error || 'Erè pandan apwobasyon an.' };
-    }
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
 
-    return {
-      submission: {
-        ...subRes.submission,
-        status: 'APPROVED',
-      },
-    };
+      const adminId = data.admin_id || user?.id;
+      if (!adminId) {
+        return { error: 'Otorizasyon manke.' };
+      }
+
+      const { data: inserted, error: insertError } = await supabase
+        .from('contribution_submissions')
+        .insert({
+          driver_id: data.driver_id,
+          work_date: data.work_date,
+          amount_cents: amount,
+          payment_method: data.payment_method,
+          payment_date: data.payment_date,
+          status: 'approved',
+          reviewed_by: adminId,
+          reviewed_at: new Date().toISOString(),
+          notes: noteText || null,
+        })
+        .select()
+        .single();
+
+      if (insertError) {
+        return { error: 'Erè pandan anrejistreman dirèk la: ' + insertError.message };
+      }
+
+      await supabase.from('financial_transactions').insert({
+        contribution_submission_id: inserted.id,
+        driver_id: data.driver_id,
+        amount_cents: amount,
+        transaction_type: 'CONTRIBUTION',
+      });
+
+      return { submission: inserted as ContributionSubmission };
+    } catch (err: any) {
+      return { error: err.message || 'Erè pandan anrejistreman dirèk la.' };
+    }
   },
 
   async approveSubmission(
@@ -740,9 +953,13 @@ export const repository = {
     adminId: string
   ): Promise<{ success: boolean; error?: string }> {
     const supabase = isSupabaseConfigured() ? createClient() : null;
-    if (!supabase) return demoStorage.approveSubmission(submissionId, adminId);
+    if (!supabase) {
+      if (isTestEnvironment) {
+        return demoStorage.approveSubmission(submissionId, adminId);
+      }
+      return { success: false, error: 'Sistèm nan pa konekte ak Supabase.' };
+    }
 
-    // The RPC identifies the admin from auth.uid()
     const { error } = await supabase.rpc('approve_contribution', {
       p_submission_id: submissionId,
     });
@@ -755,7 +972,12 @@ export const repository = {
     rejectionReason: string
   ): Promise<{ success: boolean; error?: string }> {
     const supabase = isSupabaseConfigured() ? createClient() : null;
-    if (!supabase) return demoStorage.rejectSubmission(submissionId, adminId, rejectionReason);
+    if (!supabase) {
+      if (isTestEnvironment) {
+        return demoStorage.rejectSubmission(submissionId, adminId, rejectionReason);
+      }
+      return { success: false, error: 'Sistèm nan pa konekte ak Supabase.' };
+    }
 
     const { error } = await supabase.rpc('reject_contribution', {
       p_submission_id: submissionId,
@@ -767,29 +989,17 @@ export const repository = {
   // --- PIX Settings ---
   async getPixSettings(): Promise<PixSettings> {
     const supabase = isSupabaseConfigured() ? createClient() : null;
-    if (!supabase) return demoStorage.getPixSettings();
+    if (!supabase) return DEFAULT_PIX_SETTINGS;
 
     try {
       const { data, error } = await supabase
         .from('pix_settings')
         .select('*')
         .eq('id', 1)
-        .maybeSingle();
+        .single();
 
-      if (error || !data) {
-        return DEFAULT_PIX_SETTINGS;
-      }
-
-      return {
-        id: data.id,
-        pix_key: data.pix_key,
-        pix_key_type: data.pix_key_type,
-        beneficiary_name: data.beneficiary_name,
-        city: data.city,
-        instructions: data.instructions,
-        is_active: data.is_active,
-        updated_at: data.updated_at,
-      };
+      if (error || !data) return DEFAULT_PIX_SETTINGS;
+      return data as PixSettings;
     } catch {
       return DEFAULT_PIX_SETTINGS;
     }
@@ -798,32 +1008,34 @@ export const repository = {
   async updatePixSettings(
     data: Partial<PixSettings>,
     adminId: string
-  ): Promise<{ success: boolean; settings?: PixSettings; error?: string }> {
+  ): Promise<{ success: boolean; error?: string }> {
     const supabase = isSupabaseConfigured() ? createClient() : null;
-    if (!supabase) return demoStorage.updatePixSettings(data, adminId);
+    if (!supabase) {
+      if (isTestEnvironment) {
+        return demoStorage.updatePixSettings(data, adminId);
+      }
+      return { success: false, error: 'Sistèm nan pa konekte ak Supabase.' };
+    }
 
     try {
-      const { data: updated, error } = await supabase
+      const updates = {
+        ...data,
+        updated_at: new Date().toISOString(),
+      };
+
+      const { error } = await supabase
         .from('pix_settings')
-        .update({
-          ...data,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', 1)
-        .select()
-        .single();
+        .update(updates)
+        .eq('id', 1);
 
-      if (error) {
-        return { success: false, error: error.message };
-      }
-
-      return { success: true, settings: updated as PixSettings };
+      if (error) return { success: false, error: error.message };
+      return { success: true };
     } catch (err: any) {
-      return { success: false, error: err.message || 'Erè mete ajou konfigirasyon PIX.' };
+      return { success: false, error: err.message };
     }
   },
 
-  // --- Public Donation Submissions ---
+  // --- Public PIX Donations ---
   async submitPublicDonation(data: {
     donor_name: string;
     donor_contact?: string;
@@ -831,12 +1043,17 @@ export const repository = {
     payment_date: string;
     receipt_storage_path: string;
     message?: string;
-  }): Promise<{ submission: PublicDonationSubmission | null; error?: string }> {
+  }): Promise<{ submission?: PublicDonationSubmission | null; error?: string }> {
     const supabase = isSupabaseConfigured() ? createClient() : null;
-    if (!supabase) return demoStorage.submitPublicDonation(data);
+    if (!supabase) {
+      if (isTestEnvironment) {
+        return demoStorage.submitPublicDonation(data);
+      }
+      return { error: 'Sistèm nan pa konekte ak Supabase.' };
+    }
 
     try {
-      const { data: created, error } = await supabase
+      const { data: inserted, error: insertError } = await supabase
         .from('public_donation_submissions')
         .insert({
           donor_name: data.donor_name.trim(),
@@ -850,24 +1067,29 @@ export const repository = {
         .select()
         .single();
 
-      if (error) {
-        return { submission: null, error: error.message };
+      if (insertError) {
+        return { error: 'Erè pandan anrejistreman donasyon an: ' + insertError.message };
       }
 
       return {
         submission: {
-          ...created,
-          amount_centavos: created.amount_cents,
-        },
+          ...inserted,
+          amount_centavos: inserted.amount_cents,
+        } as PublicDonationSubmission,
       };
     } catch (err: any) {
-      return { submission: null, error: err.message || 'Erè soumèt donasyon an.' };
+      return { error: err.message || 'Erè pandan soumèt donasyon an.' };
     }
   },
 
   async getAllDonationSubmissions(): Promise<PublicDonationSubmission[]> {
     const supabase = isSupabaseConfigured() ? createClient() : null;
-    if (!supabase) return demoStorage.getAllDonationSubmissions();
+    if (!supabase) {
+      if (isTestEnvironment) {
+        return demoStorage.getAllDonationSubmissions();
+      }
+      return [];
+    }
 
     try {
       const { data, error } = await supabase
@@ -879,7 +1101,7 @@ export const repository = {
       return data.map((d: any) => ({
         ...d,
         amount_centavos: d.amount_cents,
-      }));
+      })) as PublicDonationSubmission[];
     } catch {
       return [];
     }
@@ -887,20 +1109,25 @@ export const repository = {
 
   async getPendingDonationSubmissions(): Promise<PublicDonationSubmission[]> {
     const supabase = isSupabaseConfigured() ? createClient() : null;
-    if (!supabase) return demoStorage.getPendingDonationSubmissions();
+    if (!supabase) {
+      if (isTestEnvironment) {
+        return demoStorage.getPendingDonationSubmissions();
+      }
+      return [];
+    }
 
     try {
       const { data, error } = await supabase
         .from('public_donation_submissions')
         .select('*')
         .eq('status', 'pending')
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: true });
 
       if (error || !data) return [];
       return data.map((d: any) => ({
         ...d,
         amount_centavos: d.amount_cents,
-      }));
+      })) as PublicDonationSubmission[];
     } catch {
       return [];
     }
@@ -911,7 +1138,12 @@ export const repository = {
     adminId: string
   ): Promise<{ success: boolean; error?: string }> {
     const supabase = isSupabaseConfigured() ? createClient() : null;
-    if (!supabase) return demoStorage.approveDonationSubmission(donationId, adminId);
+    if (!supabase) {
+      if (isTestEnvironment) {
+        return demoStorage.approveDonationSubmission(donationId, adminId);
+      }
+      return { success: false, error: 'Sistèm nan pa konekte ak Supabase.' };
+    }
 
     const { error } = await supabase.rpc('approve_public_donation', {
       p_donation_id: donationId,
@@ -925,7 +1157,12 @@ export const repository = {
     rejectionReason: string
   ): Promise<{ success: boolean; error?: string }> {
     const supabase = isSupabaseConfigured() ? createClient() : null;
-    if (!supabase) return demoStorage.rejectDonationSubmission(donationId, adminId, rejectionReason);
+    if (!supabase) {
+      if (isTestEnvironment) {
+        return demoStorage.rejectDonationSubmission(donationId, adminId, rejectionReason);
+      }
+      return { success: false, error: 'Sistèm nan pa konekte ak Supabase.' };
+    }
 
     const { error } = await supabase.rpc('reject_public_donation', {
       p_donation_id: donationId,
@@ -943,11 +1180,16 @@ export const repository = {
     try {
       const { data, error } = await supabase.storage
         .from('donation-receipts')
-        .createSignedUrl(storagePath, 3600);
+        .createSignedUrl(storagePath, 600); // 10 minutes expiry
 
-      if (error || !data?.signedUrl) return null;
-      return data.signedUrl;
-    } catch {
+      if (error) {
+        console.error('Erè pandan kreyasyon signed URL pou resi:', error);
+        return null;
+      }
+
+      return data?.signedUrl || null;
+    } catch (err) {
+      console.error('Erè createSignedReceiptUrl:', err);
       return null;
     }
   },

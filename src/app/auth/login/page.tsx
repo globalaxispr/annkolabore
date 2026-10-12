@@ -4,7 +4,6 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { repository } from '@/lib/repository';
-import { demoStorage } from '@/lib/demo-storage';
 import { Lock, Mail, AlertTriangle, Loader2 } from 'lucide-react';
 
 export default function LoginPage() {
@@ -35,16 +34,6 @@ export default function LoginPage() {
       }
     } finally {
       setSubmitting(false);
-    }
-  };
-
-  const handleQuickDemoLogin = (userId: string) => {
-    repository.switchDemoUser(userId);
-    const user = repository.getCurrentUser();
-    if (user?.role === 'admin') {
-      router.push('/admin');
-    } else {
-      router.push('/chofe');
     }
   };
 
@@ -121,33 +110,6 @@ export default function LoginPage() {
             Konekte
           </button>
         </form>
-
-        {/* Demo Quick login shortcuts - Only shown during development demo mode */}
-        {repository.isDemo && (
-          <div className="pt-4 border-t border-slate-100 space-y-2">
-            <div className="text-[11px] font-bold text-slate-400 uppercase text-center">
-              Aksè Rapid (Mod Demo Sèlman)
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => handleQuickDemoLogin('usr-driver-01')}
-                className="p-2.5 bg-slate-50 hover:bg-emerald-50 border border-slate-200 rounded-xl text-left text-xs transition"
-              >
-                <div className="font-bold text-slate-800">Jean Baptiste Pierre</div>
-                <div className="text-[11px] text-emerald-700 font-medium">Konekte kòm Chofè</div>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleQuickDemoLogin('usr-admin-01')}
-                className="p-2.5 bg-slate-50 hover:bg-amber-50 border border-slate-200 rounded-xl text-left text-xs transition"
-              >
-                <div className="font-bold text-slate-800">Frantz Augustin</div>
-                <div className="text-[11px] text-amber-700 font-medium">Konekte kòm Trezorye</div>
-              </button>
-            </div>
-          </div>
-        )}
 
         <div className="text-center text-xs text-slate-500 pt-2">
           Ou poko gen yon kont?{' '}

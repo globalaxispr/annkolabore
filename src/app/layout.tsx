@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import { AppShell } from '@/components/shell/AppShell';
-import { DemoBanner } from '@/components/DemoBanner';
 
 export const metadata: Metadata = {
   title: 'Sistèm Jesyon Kontribisyon Chofè Legliz',
@@ -17,7 +16,6 @@ export default function RootLayout({
   return (
     <html lang="ht" className="h-full bg-slate-50/50">
       <body className="min-h-full font-sans text-slate-800 antialiased selection:bg-emerald-100 selection:text-emerald-900">
-        <DemoBanner />
         <AppShell>{children}</AppShell>
       </body>
     </html>

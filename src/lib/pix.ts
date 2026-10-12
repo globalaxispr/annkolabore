@@ -160,3 +160,17 @@ export async function generatePixQrDataUrl(payload: string): Promise<string> {
     },
   });
 }
+
+import type { PixSettings } from './types';
+
+export const DEFAULT_PIX_SETTINGS: PixSettings = {
+  id: 1,
+  pix_key: '70310589290',
+  pix_key_type: 'CPF',
+  beneficiary_name: 'Frantzciou Dorleans',
+  city: 'Pato Branco',
+  instructions:
+    'Fè transfè PIX la nan aplikasyon labank ou, answit soumèt resi peman an anba a pou administratè a ka konfime li.',
+  is_active: true,
+  updated_at: '2026-10-12T00:00:00Z',
+};

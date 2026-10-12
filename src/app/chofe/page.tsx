@@ -2,7 +2,6 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { demoStorage } from '@/lib/demo-storage';
 import { repository } from '@/lib/repository';
 import { ContributionSubmission, UserProfile } from '@/lib/types';
 import { formatBRL, formatDateCreole } from '@/lib/formatters';

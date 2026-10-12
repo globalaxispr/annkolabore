@@ -5,7 +5,6 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { repository } from '@/lib/repository';
-import { demoStorage } from '@/lib/demo-storage';
 import { uploadProfileAvatar, deleteProfileAvatar } from '@/lib/supabase/storage';
 import { ContributionSubmission, UserProfile } from '@/lib/types';
 import { formatBRL, formatDateCreole } from '@/lib/formatters';

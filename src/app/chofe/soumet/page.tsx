@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { demoStorage } from '@/lib/demo-storage';
 import { repository } from '@/lib/repository';
 import { UserProfile, PaymentMethod } from '@/lib/types';
 import { MINIMUM_CONTRIBUTION_CENTAVOS } from '@/lib/financial';
