@@ -1,4 +1,4 @@
-import { isSupabaseConfigured, createClient } from './supabase/client';
+import { isSupabaseConfigured, createClient, ensureSupabaseClient, getSupabaseDiagnostics } from './supabase/client';
 import { DEFAULT_PIX_SETTINGS } from './pix';
 import { demoStorage } from './demo-storage';
 import { MINIMUM_CONTRIBUTION_CENTAVOS } from './financial';
@@ -51,7 +51,11 @@ export const repository = {
    * Fetch current authenticated user and profile from Supabase
    */
   async getAuthUser(): Promise<UserProfile | null> {
-    const supabase = isSupabaseConfigured() ? createClient() : null;
+    let supabase = isSupabaseConfigured() ? createClient() : null;
+    if (!supabase) {
+      supabase = await ensureSupabaseClient();
+    }
+
     if (!supabase) {
       if (isTestEnvironment) {
         cachedUser = demoStorage.getCurrentUser();
@@ -112,7 +116,11 @@ export const repository = {
     email: string,
     password: string
   ): Promise<{ user: UserProfile | null; error?: string }> {
-    const supabase = isSupabaseConfigured() ? createClient() : null;
+    let supabase = isSupabaseConfigured() ? createClient() : null;
+    if (!supabase) {
+      supabase = await ensureSupabaseClient();
+    }
+
     if (!supabase) {
       if (isTestEnvironment) {
         const all = demoStorage.getAllProfiles();
@@ -124,9 +132,13 @@ export const repository = {
         cachedUser = found;
         return { user: found };
       }
+      const diag = getSupabaseDiagnostics();
+      const detailedMsg = diag.recommendedAction
+        ? `${diag.statusMessage} ${diag.recommendedAction}`
+        : diag.statusMessage || 'Sistèm nan ap tann koneksyon Supabase. Tanpri verifye varyab anviwònman yo nan Vercel.';
       return {
         user: null,
-        error: 'Sistèm nan ap tann koneksyon Supabase. Tanpri verifye varyab anviwònman yo nan Vercel.',
+        error: detailedMsg,
       };
     }
 
@@ -142,6 +154,8 @@ export const repository = {
           kreyolMsg = 'Imèl oswa modpas la pa kòrèk. Tanpri verifye yo.';
         } else if (error.message.includes('Email not confirmed')) {
           kreyolMsg = 'Adrès imèl la poko konfime. Tanpri tcheke bwat mesaj ou a.';
+        } else if (error.message.includes('API key') || (error as any).status === 401 || (error as any).status === 403) {
+          kreyolMsg = 'Kle API Supabase la (NEXT_PUBLIC_SUPABASE_ANON_KEY) pa rekonèt. Tanpri verifye kle a nan Vercel.';
         }
         return { user: null, error: kreyolMsg };
       }
@@ -153,7 +167,11 @@ export const repository = {
       const userProfile = await this.getAuthUser();
       return { user: userProfile };
     } catch (err: any) {
-      return { user: null, error: err.message || 'Erè pandan koneksyon an.' };
+      const isNetwork = err?.name === 'TypeError' || err?.message?.includes('fetch') || err?.message?.includes('network');
+      const errorMsg = isNetwork
+        ? 'Erè koneksyon rezo: Pa ka kontakte sèvè Supabase la (https://rocarrtokwekcztczgfv.supabase.co). Tanpri verifye koneksyon entènèt la.'
+        : (err.message || 'Erè pandan koneksyon an.');
+      return { user: null, error: errorMsg };
     }
   },
 
@@ -178,7 +196,11 @@ export const repository = {
       fullName = maybeFullName || '';
     }
 
-    const supabase = isSupabaseConfigured() ? createClient() : null;
+    let supabase = isSupabaseConfigured() ? createClient() : null;
+    if (!supabase) {
+      supabase = await ensureSupabaseClient();
+    }
+
     if (!supabase) {
       if (isTestEnvironment) {
         const res = demoStorage.registerUser(fullName.trim(), email.trim());
@@ -186,9 +208,13 @@ export const repository = {
         cachedUser = res.user;
         return { user: res.user };
       }
+      const diag = getSupabaseDiagnostics();
+      const detailedMsg = diag.recommendedAction
+        ? `${diag.statusMessage} ${diag.recommendedAction}`
+        : diag.statusMessage || 'Sistèm nan ap tann koneksyon Supabase. Tanpri verifye varyab anviwònman yo nan Vercel.';
       return {
         user: null,
-        error: 'Sistèm nan ap tann koneksyon Supabase. Tanpri verifye varyab anviwònman yo nan Vercel.',
+        error: detailedMsg,
       };
     }
 
@@ -210,6 +236,8 @@ export const repository = {
           kreyolMsg = 'Adrès imèl sa a deja gen yon kont nan sistèm nan.';
         } else if (error.message.includes('Password should be at least')) {
           kreyolMsg = 'Modpas la dwe gen omwen 6 karaktè.';
+        } else if (error.message.includes('API key') || (error as any).status === 401 || (error as any).status === 403) {
+          kreyolMsg = 'Kle API Supabase la (NEXT_PUBLIC_SUPABASE_ANON_KEY) pa rekonèt. Tanpri verifye kle a nan Vercel.';
         }
         return { user: null, error: kreyolMsg };
       }
@@ -371,7 +399,10 @@ export const repository = {
    * Never hardcodes R$ 55,00 in production.
    */
   async getPublicGlobalBalance(): Promise<GlobalContributionSummary> {
-    const supabase = isSupabaseConfigured() ? createClient() : null;
+    let supabase = isSupabaseConfigured() ? createClient() : null;
+    if (!supabase) {
+      supabase = await ensureSupabaseClient();
+    }
     if (!supabase) {
       if (isTestEnvironment) {
         return demoStorage.getPublicGlobalBalance();
@@ -478,7 +509,10 @@ export const repository = {
     page: number = 1,
     pageSize: number = 10
   ): Promise<PaginatedContributorsResult> {
-    const supabase = isSupabaseConfigured() ? createClient() : null;
+    let supabase = isSupabaseConfigured() ? createClient() : null;
+    if (!supabase) {
+      supabase = await ensureSupabaseClient();
+    }
     if (!supabase) {
       if (isTestEnvironment) {
         return demoStorage.getPaginatedPublicContributors(page, pageSize);
@@ -539,7 +573,10 @@ export const repository = {
   },
 
   async getFinancialSummary(): Promise<FinancialSummary> {
-    const supabase = isSupabaseConfigured() ? createClient() : null;
+    let supabase = isSupabaseConfigured() ? createClient() : null;
+    if (!supabase) {
+      supabase = await ensureSupabaseClient();
+    }
     if (!supabase) {
       if (isTestEnvironment) {
         return demoStorage.getFinancialSummary();

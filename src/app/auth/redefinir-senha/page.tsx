@@ -44,8 +44,8 @@ export default function RedefinirSenhaPage() {
     }
 
     // Check active session
-    supabase.auth.getSession().then(({ data: { session }, error }) => {
-      if (session && !error) {
+    supabase.auth.getSession().then(({ data, error }: { data: { session: any }; error: any }) => {
+      if (data?.session && !error) {
         setHasValidSession(true);
       }
       setCheckingSession(false);
@@ -54,7 +54,7 @@ export default function RedefinirSenhaPage() {
     // Also listen for PASSWORD_RECOVERY event
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
+    } = supabase.auth.onAuthStateChange((event: string, session: any) => {
       if (event === 'PASSWORD_RECOVERY' || (event === 'SIGNED_IN' && session)) {
         setHasValidSession(true);
       }
