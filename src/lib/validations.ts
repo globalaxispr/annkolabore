@@ -55,31 +55,3 @@ export const rejectSubmissionSchema = z.object({
 });
 
 export type RejectSubmissionInput = z.infer<typeof rejectSubmissionSchema>;
-
-export const scheduledWithdrawalSchema = z.object({
-  description: z.string().min(3, 'Deskripsyon retrè a dwe gen omwen 3 karaktè'),
-  amount_centavos: z
-    .number()
-    .int()
-    .min(100, 'Montan retrè a dwe omwen R$ 1,00'),
-  scheduled_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Tanpri chwazi yon dat ki valab'),
-  scheduled_time: z.string().optional(),
-  note: z.string().max(500, 'Nòt la pa ka depase 500 karaktè').optional(),
-});
-
-export type ScheduledWithdrawalInput = z.infer<typeof scheduledWithdrawalSchema>;
-
-export const cancelWithdrawalSchema = z.object({
-  cancellation_reason: z
-    .string()
-    .min(5, 'Rezon anilasyon an dwe gen omwen 5 karaktè')
-    .max(500, 'Rezon an twò long'),
-});
-
-export type CancelWithdrawalInput = z.infer<typeof cancelWithdrawalSchema>;
-
-/**
- * Legacy schema alias for backward compatibility
- */
-export const expenseSchema = scheduledWithdrawalSchema;
-export type ExpenseInput = ScheduledWithdrawalInput;

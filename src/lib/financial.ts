@@ -1,38 +1,33 @@
-import {
-  ContributionSubmission,
-  FinancialSummary,
-  ScheduledWithdrawal,
-  ExpenseRecord,
-} from './types';
+import { ContributionSubmission, FinancialSummary, GlobalContributionSummary, PublicDonationSubmission } from './types';
 
 /**
- * Minimum contribution amount per working day: R$ 10,00 (1000 centavos).
- * Drivers may contribute more than R$ 10,00 (e.g. R$ 15,00, R$ 20,00, R$ 50,00, R$ 100,00).
+ * Minimum contribution per working day: R$ 10,00 (1000 centavos).
+ * Drivers may contribute more (R$ 15,00, R$ 20,00, R$ 50,00, R$ 100,00...).
  */
 export const MINIMUM_CONTRIBUTION_CENTAVOS = 1000;
 export const DEFAULT_CONTRIBUTION_CENTAVOS = 1000;
 
 /**
- * Validate that a contribution is at least R$ 10,00.
+ * Opening balance of the group fund, in centavos.
+ * The authoritative value lives in the database (see get_financial_summary);
+ * this constant mirrors it for demo mode.
  */
+export const OPENING_BALANCE_CENTAVOS = 0;
+
 export function validateContributionAmount(amountCentavos: number): {
   valid: boolean;
   error?: string;
 } {
-  if (isNaN(amountCentavos) || amountCentavos < MINIMUM_CONTRIBUTION_CENTAVOS) {
-    return {
-      valid: false,
-      error: 'Kontribisyon an dwe omwen R$ 10,00.',
-    };
+  if (
+    !Number.isInteger(amountCentavos) ||
+    amountCentavos < MINIMUM_CONTRIBUTION_CENTAVOS
+  ) {
+    return { valid: false, error: 'Kontribisyon an dwe omwen R$ 10,00.' };
   }
   return { valid: true };
 }
 
-/**
- * Calculate total approved contributions in centavos.
- * Only submissions with status === 'APPROVED' are counted.
- * Pending or Rejected submissions MUST NOT contribute to the total.
- */
+/** Sum of APPROVED submissions only. Pending/rejected never count. */
 export function calculateTotalApprovedContributions(
   submissions: ContributionSubmission[]
 ): number {
@@ -41,66 +36,14 @@ export function calculateTotalApprovedContributions(
     .reduce((sum, s) => sum + Math.round(s.amount_centavos), 0);
 }
 
-/**
- * Calculate total executed withdrawals in centavos.
- * Only withdrawals with status === 'Egzekite' are subtracted from the official balance.
- * Scheduled ('Pwograme') or Pending ('An Atant') or Cancelled ('Anile') withdrawals do not reduce official balance.
- */
-export function calculateTotalExecutedWithdrawals(
-  withdrawals: ScheduledWithdrawal[]
-): number {
-  return withdrawals
-    .filter((w) => w.status === 'Egzekite')
-    .reduce((sum, w) => sum + Math.round(w.amount_centavos), 0);
-}
-
-/**
- * Calculate total pending scheduled withdrawals in centavos.
- * Statuses: 'Pwograme' | 'An Atant'
- */
-export function calculateTotalPendingScheduledWithdrawals(
-  withdrawals: ScheduledWithdrawal[]
-): number {
-  return withdrawals
-    .filter((w) => w.status === 'Pwograme' || w.status === 'An Atant')
-    .reduce((sum, w) => sum + Math.round(w.amount_centavos), 0);
-}
-
-/**
- * Calculate official current available balance in centavos.
- * Formula: Opening Balance (0) + Approved Contributions - Approved/Executed Withdrawals.
- */
+/** Available Balance = Opening Balance + Total Approved Contributions. */
 export function calculateCurrentBalance(
   approvedContributionsCentavos: number,
-  executedWithdrawalsCentavos: number,
-  openingBalanceCentavos = 0
+  openingBalanceCentavos = OPENING_BALANCE_CENTAVOS
 ): number {
-  return Math.round(
-    openingBalanceCentavos + approvedContributionsCentavos - executedWithdrawalsCentavos
-  );
+  return Math.round(openingBalanceCentavos + approvedContributionsCentavos);
 }
 
-/**
- * Calculate projected balance after pending scheduled withdrawals.
- * Formula: Current Available Balance - Pending Scheduled Withdrawals.
- */
-export function calculateProjectedBalance(
-  currentBalanceCentavos: number,
-  pendingScheduledCentavos: number
-): number {
-  return Math.round(currentBalanceCentavos - pendingScheduledCentavos);
-}
-
-/**
- * Backward compatibility helper for legacy expense datasets
- */
-export function calculateTotalExpenses(expenses: ExpenseRecord[]): number {
-  return expenses.reduce((sum, e) => sum + Math.round(e.amount_centavos), 0);
-}
-
-/**
- * Check if a driver has already submitted for a specific work date.
- */
 export function findDuplicateWorkDateSubmission(
   submissions: ContributionSubmission[],
   driverId: string,
@@ -112,63 +55,87 @@ export function findDuplicateWorkDateSubmission(
       s.driver_id === driverId &&
       s.work_date === workDate &&
       s.id !== excludeSubmissionId &&
-      s.status !== 'REJECTED' // A rejected submission can be resubmitted with corrections
+      s.status !== 'REJECTED' // rejected submissions may be corrected and resubmitted
   );
 }
 
-/**
- * Calculate complete financial summary from datasets.
- */
-export function calculateFinancialSummary(
+export function calculateGlobalContributionSummary(
   submissions: ContributionSubmission[],
-  withdrawals: ScheduledWithdrawal[],
-  totalMembersCount: number,
-  todayDateStr?: string
-): FinancialSummary {
-  const today = todayDateStr || new Date().toISOString().split('T')[0];
-  const currentMonthPrefix = today.slice(0, 7); // YYYY-MM
-
-  const approvedSubmissions = submissions.filter((s) => s.status === 'APPROVED');
-
-  const total_contributions_centavos = approvedSubmissions.reduce(
-    (sum, s) => sum + Math.round(s.amount_centavos),
+  openingBalanceCentavos = OPENING_BALANCE_CENTAVOS,
+  donations: PublicDonationSubmission[] = []
+): GlobalContributionSummary {
+  const approvedSubs = submissions.filter((s) => s.status === 'APPROVED');
+  const approvedDons = donations.filter(
+    (d) => d.status === 'APPROVED' || d.status === 'approved'
+  );
+  const totalApprovedSubsCentavos = calculateTotalApprovedContributions(submissions);
+  const totalApprovedDonsCentavos = approvedDons.reduce(
+    (sum, d) => sum + Math.round(d.amount_centavos || d.amount_cents || 0),
     0
   );
 
-  const total_withdrawals_centavos = calculateTotalExecutedWithdrawals(withdrawals);
-  const scheduled_withdrawals_centavos = calculateTotalPendingScheduledWithdrawals(withdrawals);
-
-  const current_balance_centavos = calculateCurrentBalance(
-    total_contributions_centavos,
-    total_withdrawals_centavos
-  );
-
-  const projected_balance_centavos = calculateProjectedBalance(
-    current_balance_centavos,
-    scheduled_withdrawals_centavos
-  );
-
-  const today_contributions_centavos = approvedSubmissions
-    .filter((s) => s.payment_date === today || s.work_date === today)
-    .reduce((sum, s) => sum + Math.round(s.amount_centavos), 0);
-
-  const month_contributions_centavos = approvedSubmissions
-    .filter(
-      (s) =>
-        s.payment_date.startsWith(currentMonthPrefix) ||
-        s.work_date.startsWith(currentMonthPrefix)
-    )
-    .reduce((sum, s) => sum + Math.round(s.amount_centavos), 0);
+  const total_approved_contributions_centavos =
+    totalApprovedSubsCentavos + totalApprovedDonsCentavos + openingBalanceCentavos;
 
   return {
-    total_contributions_centavos,
-    total_withdrawals_centavos,
-    current_balance_centavos,
-    scheduled_withdrawals_centavos,
-    projected_balance_centavos,
-    members_count: totalMembersCount,
-    today_contributions_centavos,
-    month_contributions_centavos,
+    total_approved_contributions_centavos,
+    total_approved_count: approvedSubs.length + approvedDons.length,
     last_updated: new Date().toISOString(),
   };
 }
+
+export function calculateFinancialSummary(
+  submissions: ContributionSubmission[],
+  totalMembersCount: number,
+  todayDateStr?: string,
+  openingBalanceCentavos = OPENING_BALANCE_CENTAVOS,
+  donations: PublicDonationSubmission[] = []
+): FinancialSummary {
+  const today = todayDateStr || new Date().toISOString().split('T')[0];
+  const monthPrefix = today.slice(0, 7);
+
+  const approvedSubs = submissions.filter((s) => s.status === 'APPROVED');
+  const pendingSubs = submissions.filter((s) => s.status === 'PENDING');
+
+  const approvedDons = donations.filter(
+    (d) => d.status === 'APPROVED' || d.status === 'approved'
+  );
+  const pendingDons = donations.filter(
+    (d) => d.status === 'PENDING' || d.status === 'pending'
+  );
+
+  const sumSubs = (list: ContributionSubmission[]) =>
+    list.reduce((acc, s) => acc + Math.round(s.amount_centavos), 0);
+  const sumDons = (list: PublicDonationSubmission[]) =>
+    list.reduce((acc, d) => acc + Math.round(d.amount_centavos || d.amount_cents || 0), 0);
+
+  const total_contributions_centavos =
+    sumSubs(approvedSubs) + sumDons(approvedDons);
+
+  const monthContributions =
+    sumSubs(approvedSubs.filter((s) => s.payment_date.startsWith(monthPrefix))) +
+    sumDons(approvedDons.filter((d) => d.payment_date.startsWith(monthPrefix)));
+
+  const todayContributions =
+    sumSubs(approvedSubs.filter((s) => s.payment_date === today)) +
+    sumDons(approvedDons.filter((d) => d.payment_date === today));
+
+  const totalPendingCount = pendingSubs.length + pendingDons.length;
+  const totalPendingCentavos = sumSubs(pendingSubs) + sumDons(pendingDons);
+
+  return {
+    opening_balance_centavos: openingBalanceCentavos,
+    total_contributions_centavos,
+    current_balance_centavos: calculateCurrentBalance(
+      total_contributions_centavos,
+      openingBalanceCentavos
+    ),
+    month_contributions_centavos: monthContributions,
+    today_contributions_centavos: todayContributions,
+    pending_count: totalPendingCount,
+    pending_centavos: totalPendingCentavos,
+    members_count: totalMembersCount,
+    last_updated: new Date().toISOString(),
+  };
+}
+

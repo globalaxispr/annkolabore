@@ -5,12 +5,12 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { demoStorage } from '@/lib/demo-storage';
 import { UserProfile } from '@/lib/types';
+import { GlobalContributionBalance } from '@/components/GlobalContributionBalance';
 import {
   Car,
   Home,
   PlusCircle,
   FileCheck2,
-  CalendarClock,
   Users,
   BarChart3,
   History,
@@ -18,6 +18,7 @@ import {
   Menu,
   X,
   CreditCard,
+  HeartHandshake,
 } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
@@ -37,19 +38,26 @@ export const Navbar: React.FC = () => {
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <div className="flex items-center justify-between h-16">
             {/* Brand Logo & Name */}
-            <Link href="/" className="flex items-center gap-3 group">
-              <div className="w-9 h-9 rounded-xl bg-slate-900 flex items-center justify-center text-white font-black text-sm tracking-tighter group-hover:bg-black transition">
-                CL
+            <div className="flex items-center gap-4">
+              <Link href="/" className="flex items-center gap-3 group">
+                <div className="w-9 h-9 rounded-xl bg-slate-900 flex items-center justify-center text-white font-black text-sm tracking-tighter group-hover:bg-black transition">
+                  CL
+                </div>
+                <div>
+                  <span className="block text-sm font-bold tracking-tight text-slate-900 leading-tight">
+                    Chofè Legliz
+                  </span>
+                  <span className="block text-[11px] text-slate-500 font-medium">
+                    Fon Kominotè • Brezil
+                  </span>
+                </div>
+              </Link>
+
+              {/* Compact Header Global Balance (Live Visible across the whole app) */}
+              <div className="hidden lg:block">
+                <GlobalContributionBalance variant="header" label="Fon Kominotè" />
               </div>
-              <div>
-                <span className="block text-sm font-bold tracking-tight text-slate-900 leading-tight">
-                  Chofè Legliz
-                </span>
-                <span className="block text-[11px] text-slate-500 font-medium">
-                  Fon Kominotè • Brezil
-                </span>
-              </div>
-            </Link>
+            </div>
 
             {/* Desktop Navigation */}
             <nav className="hidden md:flex items-center gap-1 text-xs font-semibold">
@@ -62,6 +70,20 @@ export const Navbar: React.FC = () => {
                 }`}
               >
                 Akèy
+              </Link>
+
+              <Link
+                href="/kontribye"
+                className={`px-3 py-2 rounded-xl transition ${
+                  pathname === '/kontribye'
+                    ? 'bg-rose-50 text-rose-800 font-bold'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                }`}
+              >
+                <span className="flex items-center gap-1.5">
+                  <HeartHandshake className="w-3.5 h-3.5 text-rose-600" />
+                  Kontribiye
+                </span>
               </Link>
 
               <Link
@@ -106,20 +128,6 @@ export const Navbar: React.FC = () => {
                   </Link>
 
                   <Link
-                    href="/admin/retre"
-                    className={`px-3 py-2 rounded-xl transition ${
-                      pathname === '/admin/retre'
-                        ? 'bg-slate-100 text-slate-900 font-bold'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-                    }`}
-                  >
-                    <span className="flex items-center gap-1.5">
-                      <CalendarClock className="w-3.5 h-3.5 text-slate-600" />
-                      Retrè Pwograme
-                    </span>
-                  </Link>
-
-                  <Link
                     href="/admin/manm"
                     className={`px-3 py-2 rounded-xl transition ${
                       pathname === '/admin/manm'
@@ -158,14 +166,26 @@ export const Navbar: React.FC = () => {
             {/* Profile badge / Auth */}
             <div className="hidden md:flex items-center gap-3">
               {user ? (
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-slate-200/70 bg-slate-50/50">
-                  <div
-                    className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold text-white ${
-                      isAdmin ? 'bg-amber-600' : 'bg-slate-900'
-                    }`}
-                  >
-                    {user.full_name.charAt(0)}
-                  </div>
+                <Link
+                  href="/perfil"
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-slate-200/70 bg-slate-50/50 hover:bg-slate-100 transition"
+                  title="Gade pwofil ou"
+                >
+                  {user.avatar_url ? (
+                    <img
+                      src={user.avatar_url}
+                      alt={user.full_name}
+                      className="w-6 h-6 rounded-full object-cover shrink-0 border border-slate-200"
+                    />
+                  ) : (
+                    <div
+                      className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold text-white ${
+                        isAdmin ? 'bg-amber-600' : 'bg-slate-900'
+                      }`}
+                    >
+                      {user.full_name.charAt(0)}
+                    </div>
+                  )}
                   <div className="text-left text-xs">
                     <span className="font-semibold text-slate-900 leading-none block">
                       {user.full_name.split(' ')[0]}
@@ -174,7 +194,7 @@ export const Navbar: React.FC = () => {
                       {isAdmin ? 'Trezorye' : 'Chofè'}
                     </span>
                   </div>
-                </div>
+                </Link>
               ) : (
                 <div className="flex items-center gap-2">
                   <Link
@@ -248,14 +268,6 @@ export const Navbar: React.FC = () => {
                   Kontribisyon an Atant
                 </Link>
                 <Link
-                  href="/admin/retre"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-slate-50 text-slate-800"
-                >
-                  <CalendarClock className="w-4 h-4 text-slate-600" />
-                  Retrè Pwograme
-                </Link>
-                <Link
                   href="/admin/manm"
                   onClick={() => setMobileMenuOpen(false)}
                   className="flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-slate-50 text-slate-800"
@@ -295,6 +307,16 @@ export const Navbar: React.FC = () => {
         >
           <Home className="w-4 h-4" />
           <span>Akèy</span>
+        </Link>
+
+        <Link
+          href="/kontribye"
+          className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-lg ${
+            pathname === '/kontribye' ? 'text-rose-600 font-bold' : 'hover:text-slate-900'
+          }`}
+        >
+          <HeartHandshake className="w-4 h-4 text-rose-500" />
+          <span>Kontribiye</span>
         </Link>
 
         <Link

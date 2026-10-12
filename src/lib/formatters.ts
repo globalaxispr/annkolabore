@@ -24,8 +24,16 @@ export function parseBRLInputToCentavos(val: string | number): number {
     return Math.round(val * 100);
   }
   if (!val) return 0;
-  // Clean string: replace comma with dot or extract digits
-  const cleaned = val.replace(/[^0-9,.-]/g, '').replace(',', '.');
+  // Clean string
+  const cleaned = val.toString().replace(/[^\d,.-]/g, '').trim();
+
+  // If there's a comma, treat dots as thousand separators and comma as decimal separator
+  if (cleaned.includes(',')) {
+    const normalized = cleaned.replace(/\./g, '').replace(',', '.');
+    const num = parseFloat(normalized);
+    return isNaN(num) ? 0 : Math.round(num * 100);
+  }
+
   const num = parseFloat(cleaned);
   if (isNaN(num)) return 0;
   return Math.round(num * 100);

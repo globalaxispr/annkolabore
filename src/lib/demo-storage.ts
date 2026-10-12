@@ -1,24 +1,36 @@
 import {
   AuditLogEntry,
   ContributionSubmission,
-  ExpenseRecord,
   FinancialSummary,
-  ScheduledWithdrawal,
+  GlobalContributionSummary,
+  PaginatedContributorsResult,
+  PixSettings,
+  PublicApprovedContributor,
+  PublicContribution,
+  PublicDonationSubmission,
+  UnifiedTransactionItem,
   UserProfile,
 } from './types';
 import {
   calculateFinancialSummary,
-  DEFAULT_CONTRIBUTION_CENTAVOS,
-  MINIMUM_CONTRIBUTION_CENTAVOS,
+  calculateGlobalContributionSummary,
+  findDuplicateWorkDateSubmission,
   validateContributionAmount,
+  OPENING_BALANCE_CENTAVOS,
 } from './financial';
 
-// Demo initial profiles
+/**
+ * DEVELOPMENT-ONLY demo data. Never represents real or verified transactions.
+ * Used only when Supabase credentials are not configured.
+ */
+
+const ADMIN_NAME = 'Frantz Augustin (Trezorye)';
+
 export const DEMO_PROFILES: UserProfile[] = [
   {
     id: 'usr-admin-01',
     email: 'trezorye@legliz.test',
-    full_name: 'Frantz Augustin (Trezorye)',
+    full_name: ADMIN_NAME,
     role: 'admin',
     phone: '+55 11 98765-4321',
     created_at: '2026-01-01T10:00:00Z',
@@ -57,7 +69,6 @@ export const DEMO_PROFILES: UserProfile[] = [
   },
 ];
 
-// Initial demo contributions showing variable amounts (>= R$ 10,00)
 export const DEMO_SUBMISSIONS: ContributionSubmission[] = [
   {
     id: 'sub-001',
@@ -65,12 +76,12 @@ export const DEMO_SUBMISSIONS: ContributionSubmission[] = [
     driver_name: 'Jean Baptiste Pierre',
     work_date: '2026-10-10',
     payment_date: '2026-10-10',
-    amount_centavos: 1000, // R$ 10,00
+    amount_centavos: 1000,
     payment_method: 'PIX',
     transaction_ref: 'PIX-98234-JB',
     status: 'APPROVED',
     reviewed_by: 'usr-admin-01',
-    reviewed_by_name: 'Frantz Augustin (Trezorye)',
+    reviewed_by_name: ADMIN_NAME,
     reviewed_at: '2026-10-10T19:00:00Z',
     created_at: '2026-10-10T18:30:00Z',
   },
@@ -80,13 +91,13 @@ export const DEMO_SUBMISSIONS: ContributionSubmission[] = [
     driver_name: 'Marc Antoine Désir',
     work_date: '2026-10-10',
     payment_date: '2026-10-10',
-    amount_centavos: 2000, // R$ 20,00 (contribution exceeding minimum)
+    amount_centavos: 2000,
     payment_method: 'PIX',
     transaction_ref: 'PIX-11223-MD',
     note: 'Kontribisyon espesyal R$ 20 pou jounen an',
     status: 'APPROVED',
     reviewed_by: 'usr-admin-01',
-    reviewed_by_name: 'Frantz Augustin (Trezorye)',
+    reviewed_by_name: ADMIN_NAME,
     reviewed_at: '2026-10-10T20:15:00Z',
     created_at: '2026-10-10T19:45:00Z',
   },
@@ -96,12 +107,12 @@ export const DEMO_SUBMISSIONS: ContributionSubmission[] = [
     driver_name: 'Wilner Joseph',
     work_date: '2026-10-11',
     payment_date: '2026-10-11',
-    amount_centavos: 1500, // R$ 15,00
+    amount_centavos: 1500,
     payment_method: 'Espès',
     note: 'Remèt nan men trezorye apre sèvis dimanch',
     status: 'APPROVED',
     reviewed_by: 'usr-admin-01',
-    reviewed_by_name: 'Frantz Augustin (Trezorye)',
+    reviewed_by_name: ADMIN_NAME,
     reviewed_at: '2026-10-11T14:00:00Z',
     created_at: '2026-10-11T13:30:00Z',
   },
@@ -111,12 +122,12 @@ export const DEMO_SUBMISSIONS: ContributionSubmission[] = [
     driver_name: 'Jean Baptiste Pierre',
     work_date: '2026-10-11',
     payment_date: '2026-10-11',
-    amount_centavos: 1000, // R$ 10,00
+    amount_centavos: 1000,
     payment_method: 'PIX',
     transaction_ref: 'PIX-44321-JB',
     status: 'APPROVED',
     reviewed_by: 'usr-admin-01',
-    reviewed_by_name: 'Frantz Augustin (Trezorye)',
+    reviewed_by_name: ADMIN_NAME,
     reviewed_at: '2026-10-11T21:00:00Z',
     created_at: '2026-10-11T20:40:00Z',
   },
@@ -139,7 +150,7 @@ export const DEMO_SUBMISSIONS: ContributionSubmission[] = [
     driver_name: 'Emmanuel Charles',
     work_date: '2026-10-12',
     payment_date: '2026-10-12',
-    amount_centavos: 5000, // R$ 50,00
+    amount_centavos: 5000,
     payment_method: 'PIX',
     transaction_ref: 'PIX-77665-EC',
     note: 'Benediksyon espesyal pou legliz la',
@@ -159,42 +170,12 @@ export const DEMO_SUBMISSIONS: ContributionSubmission[] = [
     rejection_reason:
       'Prèv peman an pa t klè, nimewo tranzaksyon an pa t pase sou kont legliz la.',
     reviewed_by: 'usr-admin-01',
-    reviewed_by_name: 'Frantz Augustin (Trezorye)',
+    reviewed_by_name: ADMIN_NAME,
     reviewed_at: '2026-10-09T18:00:00Z',
     created_at: '2026-10-09T17:00:00Z',
   },
 ];
 
-// Initial demo withdrawals: historical outgoing transactions reconciled as withdrawals
-export const DEMO_WITHDRAWALS: ScheduledWithdrawal[] = [
-  {
-    id: 'wth-001',
-    description: 'Soutyen ofisyèl pou aktivite ak ministè legliz la',
-    amount_centavos: 3000, // R$ 30,00
-    scheduled_date: '2026-10-08',
-    status: 'Egzekite',
-    created_by: 'usr-admin-01',
-    created_by_name: 'Frantz Augustin (Trezorye)',
-    executed_by: 'usr-admin-01',
-    executed_by_name: 'Frantz Augustin (Trezorye)',
-    executed_at: '2026-10-08T16:00:00Z',
-    note: 'Donasyon transfere bay kès santral legliz la',
-    created_at: '2026-10-08T10:00:00Z',
-  },
-  {
-    id: 'wth-002',
-    description: 'Donasyon espesyal pou depans kominote legliz la',
-    amount_centavos: 2000, // R$ 20,00
-    scheduled_date: '2026-10-25',
-    status: 'Pwograme',
-    created_by: 'usr-admin-01',
-    created_by_name: 'Frantz Augustin (Trezorye)',
-    note: 'Prevwa pou remèt apre reyinyon jeneral la',
-    created_at: '2026-10-12T10:00:00Z',
-  },
-];
-
-// Initial audit logs
 export const DEMO_AUDIT_LOGS: AuditLogEntry[] = [
   {
     id: 'aud-001',
@@ -202,10 +183,9 @@ export const DEMO_AUDIT_LOGS: AuditLogEntry[] = [
     entity_type: 'submission',
     entity_id: 'sub-001',
     actor_id: 'usr-admin-01',
-    actor_name: 'Frantz Augustin (Trezorye)',
+    actor_name: ADMIN_NAME,
     actor_role: 'admin',
-    details:
-      'Apwouve kontribisyon R$ 10,00 pou Jean Baptiste Pierre (Travay: 10/10/2026)',
+    details: 'Apwouve kontribisyon R$ 10,00 pou Jean Baptiste Pierre (Travay: 10/10/2026)',
     created_at: '2026-10-10T19:00:00Z',
   },
   {
@@ -214,49 +194,57 @@ export const DEMO_AUDIT_LOGS: AuditLogEntry[] = [
     entity_type: 'submission',
     entity_id: 'sub-002',
     actor_id: 'usr-admin-01',
-    actor_name: 'Frantz Augustin (Trezorye)',
+    actor_name: ADMIN_NAME,
     actor_role: 'admin',
-    details:
-      'Apwouve kontribisyon R$ 20,00 pou Marc Antoine Désir (Travay: 10/10/2026)',
+    details: 'Apwouve kontribisyon R$ 20,00 pou Marc Antoine Désir (Travay: 10/10/2026)',
     created_at: '2026-10-10T20:15:00Z',
   },
   {
     id: 'aud-003',
-    action: 'EXECUTE_WITHDRAWAL',
-    entity_type: 'withdrawal',
-    entity_id: 'wth-001',
+    action: 'REJECT_CONTRIBUTION',
+    entity_type: 'submission',
+    entity_id: 'sub-007',
     actor_id: 'usr-admin-01',
-    actor_name: 'Frantz Augustin (Trezorye)',
+    actor_name: ADMIN_NAME,
     actor_role: 'admin',
-    details: 'Egzekite retrè R$ 30,00 pou soutyen ministè legliz la',
-    created_at: '2026-10-08T16:00:00Z',
-  },
-  {
-    id: 'aud-004',
-    action: 'SCHEDULE_WITHDRAWAL',
-    entity_type: 'withdrawal',
-    entity_id: 'wth-002',
-    actor_id: 'usr-admin-01',
-    actor_name: 'Frantz Augustin (Trezorye)',
-    actor_role: 'admin',
-    details:
-      'Pwograme retrè R$ 20,00 pou dat 25/10/2026 (Donasyon espesyal kominote)',
-    created_at: '2026-10-12T10:00:00Z',
+    details: 'Refize kontribisyon Wilner Joseph. Rezon: Prèv peman an pa t klè.',
+    created_at: '2026-10-09T18:00:00Z',
   },
 ];
 
-const STORAGE_KEY_PROFILES = 'knt_profiles_v2';
-const STORAGE_KEY_SUBMISSIONS = 'knt_submissions_v2';
-const STORAGE_KEY_WITHDRAWALS = 'knt_withdrawals_v2';
-const STORAGE_KEY_AUDIT = 'knt_audit_v2';
-const STORAGE_KEY_CURRENT_USER = 'knt_current_user_v2';
+// v3 keys: older demo data in the browser is ignored rather than migrated.
+const STORAGE_KEY_PROFILES = 'knt_profiles_v3';
+const STORAGE_KEY_SUBMISSIONS = 'knt_submissions_v3';
+const STORAGE_KEY_AUDIT = 'knt_audit_v3';
+const STORAGE_KEY_CURRENT_USER = 'knt_current_user_v3';
+const STORAGE_KEY_PIX_SETTINGS = 'knt_pix_settings_v3';
+const STORAGE_KEY_DONATIONS = 'knt_donations_v3';
+
+export const DEFAULT_PIX_SETTINGS: PixSettings = {
+  id: 1,
+  pix_key: '70310589290',
+  pix_key_type: 'CPF',
+  beneficiary_name: 'Frantzciou Dorleans',
+  city: 'Pato Branco',
+  instructions:
+    'Fè transfè PIX la nan aplikasyon labank ou, answit soumèt resi peman an anba a pou administratè a ka konfime li.',
+  is_active: true,
+  updated_at: '2026-10-12T00:00:00Z',
+};
+
+const clone = <T,>(items: T[]): T[] => items.map((i) => ({ ...i }));
+
+const brl = (centavos: number) =>
+  `R$ ${(centavos / 100).toFixed(2).replace('.', ',')}`;
 
 class DemoStorage {
-  private profiles: UserProfile[] = [...DEMO_PROFILES];
-  private submissions: ContributionSubmission[] = [...DEMO_SUBMISSIONS];
-  private withdrawals: ScheduledWithdrawal[] = [...DEMO_WITHDRAWALS];
-  private auditLogs: AuditLogEntry[] = [...DEMO_AUDIT_LOGS];
-  private currentUserId: string = 'usr-driver-01'; // Default demo user: Jean Baptiste Pierre
+  private profiles: UserProfile[] = clone(DEMO_PROFILES);
+  private submissions: ContributionSubmission[] = clone(DEMO_SUBMISSIONS);
+  private donationSubmissions: PublicDonationSubmission[] = [];
+  private pixSettings: PixSettings = { ...DEFAULT_PIX_SETTINGS };
+  private auditLogs: AuditLogEntry[] = clone(DEMO_AUDIT_LOGS);
+  private currentUserId = 'usr-driver-01';
+  private balanceListeners: Array<(balance: GlobalContributionSummary) => void> = [];
 
   constructor() {
     this.loadFromStorage();
@@ -271,20 +259,18 @@ class DemoStorage {
     try {
       const p = localStorage.getItem(STORAGE_KEY_PROFILES);
       if (p) this.profiles = JSON.parse(p);
-
       const s = localStorage.getItem(STORAGE_KEY_SUBMISSIONS);
       if (s) this.submissions = JSON.parse(s);
-
-      const w = localStorage.getItem(STORAGE_KEY_WITHDRAWALS);
-      if (w) this.withdrawals = JSON.parse(w);
-
+      const d = localStorage.getItem(STORAGE_KEY_DONATIONS);
+      if (d) this.donationSubmissions = JSON.parse(d);
+      const pix = localStorage.getItem(STORAGE_KEY_PIX_SETTINGS);
+      if (pix) this.pixSettings = JSON.parse(pix);
       const a = localStorage.getItem(STORAGE_KEY_AUDIT);
       if (a) this.auditLogs = JSON.parse(a);
-
       const u = localStorage.getItem(STORAGE_KEY_CURRENT_USER);
-      if (u) this.currentUserId = u;
+      if (u !== null) this.currentUserId = u;
     } catch {
-      // Fallback to in-memory defaults
+      // fall back to in-memory defaults
     }
   }
 
@@ -293,59 +279,75 @@ class DemoStorage {
     try {
       localStorage.setItem(STORAGE_KEY_PROFILES, JSON.stringify(this.profiles));
       localStorage.setItem(STORAGE_KEY_SUBMISSIONS, JSON.stringify(this.submissions));
-      localStorage.setItem(STORAGE_KEY_WITHDRAWALS, JSON.stringify(this.withdrawals));
+      localStorage.setItem(STORAGE_KEY_DONATIONS, JSON.stringify(this.donationSubmissions));
+      localStorage.setItem(STORAGE_KEY_PIX_SETTINGS, JSON.stringify(this.pixSettings));
       localStorage.setItem(STORAGE_KEY_AUDIT, JSON.stringify(this.auditLogs));
       localStorage.setItem(STORAGE_KEY_CURRENT_USER, this.currentUserId);
     } catch {
-      // Storage quota or error handling
+      // ignore quota errors
     }
   }
 
-  public resetDemoData() {
-    this.profiles = [...DEMO_PROFILES];
-    this.submissions = [...DEMO_SUBMISSIONS];
-    this.withdrawals = [...DEMO_WITHDRAWALS];
-    this.auditLogs = [...DEMO_AUDIT_LOGS];
-    this.currentUserId = 'usr-driver-01';
-    this.saveToStorage();
+  private log(entry: Omit<AuditLogEntry, 'id' | 'created_at'>) {
+    this.auditLogs.push({
+      ...entry,
+      id: `aud-${Date.now()}-${this.auditLogs.length}`,
+      created_at: new Date().toISOString(),
+    });
   }
 
+  private getAdmin(adminId: string): UserProfile | null {
+    const admin = this.profiles.find((p) => p.id === adminId);
+    return admin && admin.role === 'admin' ? admin : null;
+  }
+
+  public resetDemoData() {
+    this.profiles = clone(DEMO_PROFILES);
+    this.submissions = clone(DEMO_SUBMISSIONS);
+    this.donationSubmissions = [];
+    this.pixSettings = { ...DEFAULT_PIX_SETTINGS };
+    this.auditLogs = clone(DEMO_AUDIT_LOGS);
+    this.currentUserId = 'usr-driver-01';
+    this.saveToStorage();
+    this.notifyBalanceListeners();
+  }
+
+  // --- Session (demo) ---
+
   public getCurrentUser(): UserProfile | null {
-    return this.profiles.find((p) => p.id === this.currentUserId) || this.profiles[1];
+    if (!this.currentUserId) return null;
+    return this.profiles.find((p) => p.id === this.currentUserId) || null;
   }
 
   public setCurrentUser(userId: string): UserProfile | null {
     const user = this.profiles.find((p) => p.id === userId);
-    if (user) {
-      this.currentUserId = userId;
-      this.saveToStorage();
-      return user;
-    }
-    return null;
+    if (!user) return null;
+    this.currentUserId = userId;
+    this.saveToStorage();
+    return user;
+  }
+
+  public signOut() {
+    this.currentUserId = '';
+    this.saveToStorage();
   }
 
   public getAllProfiles(): UserProfile[] {
-    return [...this.profiles];
+    return clone(this.profiles);
   }
 
   public registerUser(
     full_name: string,
     email: string
   ): { user: UserProfile; error?: string } {
-    const exists = this.profiles.some(
-      (p) => p.email.toLowerCase() === email.toLowerCase()
-    );
-    if (exists) {
-      return {
-        user: null as unknown as UserProfile,
-        error: 'Adrès imèl sa a deja gen yon kont',
-      };
+    if (this.profiles.some((p) => p.email.toLowerCase() === email.toLowerCase())) {
+      return { user: null as unknown as UserProfile, error: 'Adrès imèl sa a deja gen yon kont' };
     }
     const newUser: UserProfile = {
       id: `usr-${Date.now()}`,
       email,
       full_name,
-      role: 'driver', // Always default to driver
+      role: 'driver', // new accounts are always drivers
       created_at: new Date().toISOString(),
     };
     this.profiles.push(newUser);
@@ -354,125 +356,201 @@ class DemoStorage {
     return { user: newUser };
   }
 
+  public updateProfile(
+    userId: string,
+    data: { full_name?: string; avatar_url?: string }
+  ): { success: boolean; user?: UserProfile; error?: string } {
+    const user = this.profiles.find((p) => p.id === userId);
+    if (!user) return { success: false, error: 'Itilizatè pa jwenn' };
+
+    if (data.full_name && data.full_name.trim().length >= 3) {
+      user.full_name = data.full_name.trim();
+    }
+    if (data.avatar_url !== undefined) {
+      user.avatar_url = data.avatar_url;
+    }
+    user.updated_at = new Date().toISOString();
+    this.saveToStorage();
+    return { success: true, user: { ...user } };
+  }
+
+  // --- Read models ---
+
   public getFinancialSummary(): FinancialSummary {
     return calculateFinancialSummary(
       this.submissions,
-      this.withdrawals,
-      this.profiles.filter((p) => p.role === 'driver').length
+      this.profiles.filter((p) => p.role === 'driver').length,
+      undefined,
+      OPENING_BALANCE_CENTAVOS,
+      this.donationSubmissions
     );
   }
 
   /**
-   * Unified transaction history: only approved contributions and executed withdrawals
+   * Public aggregate of all approved contributions and approved public donations.
+   * Excludes pending and rejected contributions.
    */
-  public getUnifiedTransactions(): {
-    id: string;
-    type: 'CONTRIBUTION' | 'WITHDRAWAL';
-    title: string;
-    description: string;
-    amount_centavos: number;
-    transaction_date: string;
-    status: string;
-    actor_name?: string;
-  }[] {
-    const approvedContributions = this.submissions
+  public getPublicGlobalBalance(): GlobalContributionSummary {
+    return calculateGlobalContributionSummary(
+      this.submissions,
+      OPENING_BALANCE_CENTAVOS,
+      this.donationSubmissions
+    );
+  }
+
+  /**
+   * Realtime reactive subscription to global balance updates.
+   */
+  public subscribeToGlobalBalance(
+    listener: (balance: GlobalContributionSummary) => void
+  ): () => void {
+    this.balanceListeners.push(listener);
+    return () => {
+      this.balanceListeners = this.balanceListeners.filter((l) => l !== listener);
+    };
+  }
+
+  private notifyBalanceListeners() {
+    const balance = this.getPublicGlobalBalance();
+    for (const listener of this.balanceListeners) {
+      try {
+        listener(balance);
+      } catch (err) {
+        console.error('Erè nan listener balans:', err);
+      }
+    }
+  }
+
+  /** Unified transaction stream of official approved contributions and donations. */
+  public getUnifiedTransactions(): UnifiedTransactionItem[] {
+    const contribItems: UnifiedTransactionItem[] = this.submissions
       .filter((s) => s.status === 'APPROVED')
       .map((s) => ({
         id: s.id,
         type: 'CONTRIBUTION' as const,
         title: s.driver_name,
-        description: `Kontribisyon pou travay ${s.work_date}`,
         amount_centavos: s.amount_centavos,
-        transaction_date: s.reviewed_at || s.created_at,
-        status: 'Apwouve',
-        actor_name: s.reviewed_by_name,
+        date: s.payment_date,
+        timestamp: s.reviewed_at || s.created_at,
+        status: 'Apwouve' as const,
+        method: s.payment_method,
+        ref: s.transaction_ref,
+        subtitle: `Dat travay: ${s.work_date}`,
       }));
 
-    const executedWithdrawals = this.withdrawals
-      .filter((w) => w.status === 'Egzekite')
-      .map((w) => ({
-        id: w.id,
-        type: 'WITHDRAWAL' as const,
-        title: 'Retrè Fon',
-        description: w.description,
-        amount_centavos: w.amount_centavos,
-        transaction_date: w.executed_at || w.created_at,
-        status: 'Egzekite',
-        actor_name: w.executed_by_name,
+    const donationItems: UnifiedTransactionItem[] = this.donationSubmissions
+      .filter((d) => d.status === 'APPROVED' || d.status === 'approved')
+      .map((d) => ({
+        id: d.id,
+        type: 'DONATION' as const,
+        title: d.donor_name,
+        amount_centavos: d.amount_centavos || d.amount_cents,
+        date: d.payment_date,
+        timestamp: d.reviewed_at || d.created_at,
+        status: 'Apwouve' as const,
+        method: 'PIX',
+        ref: `DON-${d.id.slice(0, 8)}`,
+        subtitle: 'Donasyon Piblik',
       }));
 
-    return [...approvedContributions, ...executedWithdrawals].sort(
-      (a, b) =>
-        new Date(b.transaction_date).getTime() - new Date(a.transaction_date).getTime()
+    return [...contribItems, ...donationItems].sort(
+      (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
     );
   }
 
-  public getPublicTransactions() {
+  /** Approved contributions only, with no private fields (email, receipt, note). */
+  public getPublicTransactions(): PublicContribution[] {
     return this.submissions
-      .filter((s) => s.status === 'APPROVED')
+      .filter((s) => s.status === 'APPROVED' || s.status === 'approved')
+      .map((s) => {
+        const driver = this.profiles.find((p) => p.id === s.driver_id);
+        return {
+          id: s.id,
+          driver_name: s.driver_name,
+          driver_avatar_url: driver?.avatar_url,
+          amount_centavos: s.amount_centavos,
+          work_date: s.work_date,
+          payment_date: s.payment_date,
+          approval_date: s.reviewed_at || s.created_at,
+          status: 'APPROVED' as const,
+        };
+      })
       .sort(
-        (a, b) =>
-          new Date(b.reviewed_at || b.created_at).getTime() -
-          new Date(a.reviewed_at || a.created_at).getTime()
-      )
-      .map((s) => ({
-        id: s.id,
-        driver_name: s.driver_name,
-        amount_centavos: s.amount_centavos,
-        work_date: s.work_date,
-        payment_date: s.payment_date,
-        approval_date: s.reviewed_at || s.created_at,
-        status: s.status,
-      }));
+        (a, b) => new Date(b.approval_date).getTime() - new Date(a.approval_date).getTime()
+      );
+  }
+
+  /**
+   * Paginated public approved contributors list with stable secondary sort key.
+   */
+  public getPaginatedPublicContributors(
+    page: number = 1,
+    pageSize: number = 10
+  ): PaginatedContributorsResult {
+    const approvedList: PublicApprovedContributor[] = this.submissions
+      .filter((s) => s.status === 'APPROVED' || s.status === 'approved')
+      .map((s) => {
+        const driver = this.profiles.find((p) => p.id === s.driver_id);
+        return {
+          id: s.id,
+          driver_id: s.driver_id,
+          driver_name: s.driver_name,
+          driver_avatar_url: driver?.avatar_url,
+          amount_cents: s.amount_centavos,
+          amount_centavos: s.amount_centavos,
+          work_date: s.work_date,
+          payment_date: s.payment_date,
+          approval_date: s.reviewed_at || s.created_at,
+          payment_method: s.payment_method,
+          status: 'Apwouve' as const,
+        };
+      })
+      .sort((a, b) => {
+        const timeDiff =
+          new Date(b.approval_date).getTime() - new Date(a.approval_date).getTime();
+        if (timeDiff !== 0) return timeDiff;
+        return b.id.localeCompare(a.id); // Stable secondary sort
+      });
+
+    const totalCount = approvedList.length;
+    const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+    const normalizedPage = Math.max(1, page);
+    const start = (normalizedPage - 1) * pageSize;
+    const data = start < totalCount ? approvedList.slice(start, start + pageSize) : [];
+
+    return {
+      data,
+      page: normalizedPage,
+      pageSize,
+      totalCount,
+      totalPages,
+    };
   }
 
   public getSubmissionsForDriver(driverId: string): ContributionSubmission[] {
     return this.submissions
       .filter((s) => s.driver_id === driverId)
-      .sort(
-        (a, b) =>
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      );
+      .map((s) => ({ ...s }))
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }
 
   public getAllPendingSubmissions(): ContributionSubmission[] {
-    return this.submissions
-      .filter((s) => s.status === 'PENDING')
-      .sort(
-        (a, b) =>
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      );
+    return this.getAllSubmissions().filter((s) => s.status === 'PENDING');
   }
 
   public getAllSubmissions(): ContributionSubmission[] {
-    return [...this.submissions].sort(
-      (a, b) =>
-        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    return clone(this.submissions).sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     );
-  }
-
-  public getAllWithdrawals(): ScheduledWithdrawal[] {
-    return [...this.withdrawals].sort(
-      (a, b) =>
-        new Date(b.scheduled_date).getTime() - new Date(a.scheduled_date).getTime()
-    );
-  }
-
-  public getScheduledWithdrawals(): ScheduledWithdrawal[] {
-    return this.withdrawals
-      .filter((w) => w.status === 'Pwograme' || w.status === 'An Atant')
-      .sort(
-        (a, b) =>
-          new Date(a.scheduled_date).getTime() - new Date(b.scheduled_date).getTime()
-      );
   }
 
   public getAllAuditLogs(): AuditLogEntry[] {
-    return [...this.auditLogs].sort(
-      (a, b) =>
-        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    return clone(this.auditLogs).sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     );
   }
+
+  // --- Commands ---
 
   public submitContribution(data: {
     driver_id: string;
@@ -485,24 +563,12 @@ class DemoStorage {
     note?: string;
   }): { submission: ContributionSubmission | null; error?: string } {
     const driver = this.profiles.find((p) => p.id === data.driver_id);
-    if (!driver) {
-      return { submission: null, error: 'Chofè sa a pa egziste nan sistèm nan' };
-    }
+    if (!driver) return { submission: null, error: 'Chofè sa a pa egziste nan sistèm nan' };
 
-    // Validation: minimum R$ 10,00 (1000 centavos)
     const val = validateContributionAmount(data.amount_centavos);
-    if (!val.valid) {
-      return { submission: null, error: val.error };
-    }
+    if (!val.valid) return { submission: null, error: val.error };
 
-    // Check duplicate work date
-    const duplicate = this.submissions.find(
-      (s) =>
-        s.driver_id === data.driver_id &&
-        s.work_date === data.work_date &&
-        s.status !== 'REJECTED'
-    );
-    if (duplicate) {
+    if (findDuplicateWorkDateSubmission(this.submissions, data.driver_id, data.work_date)) {
       return {
         submission: null,
         error: `Ou te deja soumèt yon kontribisyon pou dat travay sa a (${data.work_date}). Si gen yon erè, kontakte trezorye a.`,
@@ -510,7 +576,7 @@ class DemoStorage {
     }
 
     const newSub: ContributionSubmission = {
-      id: `sub-${Date.now()}`,
+      id: `sub-${Date.now()}-${this.submissions.length}`,
       driver_id: data.driver_id,
       driver_name: driver.full_name,
       work_date: data.work_date,
@@ -523,71 +589,52 @@ class DemoStorage {
       status: 'PENDING',
       created_at: new Date().toISOString(),
     };
-
     this.submissions.push(newSub);
-
-    this.auditLogs.push({
-      id: `aud-${Date.now()}`,
+    this.log({
       action: 'SUBMIT_CONTRIBUTION',
       entity_type: 'submission',
       entity_id: newSub.id,
       actor_id: driver.id,
       actor_name: driver.full_name,
       actor_role: driver.role,
-      details: `Soumèt kontribisyon ${(data.amount_centavos / 100).toFixed(2)} BRL pou travay ${data.work_date}`,
-      created_at: new Date().toISOString(),
+      details: `Soumèt kontribisyon ${brl(data.amount_centavos)} pou travay ${data.work_date}`,
     });
-
     this.saveToStorage();
-    return { submission: newSub };
+    return { submission: { ...newSub } };
   }
 
   public approveSubmission(
     submissionId: string,
     adminId: string
   ): { success: boolean; error?: string } {
-    const admin = this.profiles.find((p) => p.id === adminId);
-    if (!admin || admin.role !== 'admin') {
-      return {
-        success: false,
-        error: 'Aksyon sa a mande otorizasyon administratè oswa trezorye.',
-      };
+    const admin = this.getAdmin(adminId);
+    if (!admin) {
+      return { success: false, error: 'Aksyon sa a mande otorizasyon administratè oswa trezorye.' };
     }
-
     const sub = this.submissions.find((s) => s.id === submissionId);
-    if (!sub) {
-      return { success: false, error: 'Kontribisyon sa a pa jwenn nan sistèm nan.' };
-    }
-
-    // Must be PENDING to approve
+    if (!sub) return { success: false, error: 'Kontribisyon sa a pa jwenn nan sistèm nan.' };
     if (sub.status !== 'PENDING') {
-      return {
-        success: false,
-        error: `Kontribisyon sa a pa nan eta 'An Atant' ankò (Eta aktyèl: ${sub.status}).`,
-      };
+      return { success: false, error: "Kontribisyon sa a pa nan eta 'An Atant' ankò." };
     }
 
-    // Perform atomic approval
+    const now = new Date().toISOString();
     sub.status = 'APPROVED';
     sub.reviewed_by = admin.id;
     sub.reviewed_by_name = admin.full_name;
-    sub.reviewed_at = new Date().toISOString();
-    sub.updated_at = new Date().toISOString();
+    sub.reviewed_at = now;
+    sub.updated_at = now;
 
-    // Log to audit
-    this.auditLogs.push({
-      id: `aud-${Date.now()}`,
+    this.log({
       action: 'APPROVE_CONTRIBUTION',
       entity_type: 'submission',
       entity_id: sub.id,
       actor_id: admin.id,
       actor_name: admin.full_name,
       actor_role: 'admin',
-      details: `Apwouve kontribisyon R$ ${(sub.amount_centavos / 100).toFixed(2)} pou chofè ${sub.driver_name} (Travay: ${sub.work_date})`,
-      created_at: new Date().toISOString(),
+      details: `Apwouve kontribisyon ${brl(sub.amount_centavos)} pou ${sub.driver_name} (Travay: ${sub.work_date})`,
     });
-
     this.saveToStorage();
+    this.notifyBalanceListeners();
     return { success: true };
   }
 
@@ -596,56 +643,41 @@ class DemoStorage {
     adminId: string,
     rejectionReason: string
   ): { success: boolean; error?: string } {
-    const admin = this.profiles.find((p) => p.id === adminId);
-    if (!admin || admin.role !== 'admin') {
-      return {
-        success: false,
-        error: 'Aksyon sa a mande otorizasyon administratè oswa trezorye.',
-      };
+    const admin = this.getAdmin(adminId);
+    if (!admin) {
+      return { success: false, error: 'Aksyon sa a mande otorizasyon administratè oswa trezorye.' };
     }
-
     if (!rejectionReason || rejectionReason.trim().length < 5) {
-      return {
-        success: false,
-        error: 'Tanpri bay yon rezon klè pou refi a (omwen 5 karaktè).',
-      };
+      return { success: false, error: 'Tanpri bay yon rezon klè pou refi a (omwen 5 karaktè).' };
     }
-
     const sub = this.submissions.find((s) => s.id === submissionId);
-    if (!sub) {
-      return { success: false, error: 'Kontribisyon sa a pa jwenn nan sistèm nan.' };
-    }
-
+    if (!sub) return { success: false, error: 'Kontribisyon sa a pa jwenn nan sistèm nan.' };
     if (sub.status !== 'PENDING') {
-      return {
-        success: false,
-        error: `Kontribisyon sa a pa nan eta 'An Atant' ankò (Eta aktyèl: ${sub.status}).`,
-      };
+      return { success: false, error: "Kontribisyon sa a pa nan eta 'An Atant' ankò." };
     }
 
+    const now = new Date().toISOString();
     sub.status = 'REJECTED';
     sub.rejection_reason = rejectionReason.trim();
     sub.reviewed_by = admin.id;
     sub.reviewed_by_name = admin.full_name;
-    sub.reviewed_at = new Date().toISOString();
-    sub.updated_at = new Date().toISOString();
+    sub.reviewed_at = now;
+    sub.updated_at = now;
 
-    this.auditLogs.push({
-      id: `aud-${Date.now()}`,
+    this.log({
       action: 'REJECT_CONTRIBUTION',
       entity_type: 'submission',
       entity_id: sub.id,
       actor_id: admin.id,
       actor_name: admin.full_name,
       actor_role: 'admin',
-      details: `Refize kontribisyon ${sub.driver_name}. Rezon: ${rejectionReason}`,
-      created_at: new Date().toISOString(),
+      details: `Refize kontribisyon ${sub.driver_name}. Rezon: ${rejectionReason.trim()}`,
     });
-
     this.saveToStorage();
     return { success: true };
   }
 
+  /** Treasurer records a verified cash contribution handed over directly. */
   public recordDirectContribution(data: {
     admin_id: string;
     driver_id: string;
@@ -655,23 +687,25 @@ class DemoStorage {
     payment_method: 'PIX' | 'Espès' | 'Transfè' | 'Lòt';
     note?: string;
   }): { submission: ContributionSubmission | null; error?: string } {
-    const admin = this.profiles.find((p) => p.id === data.admin_id);
-    if (!admin || admin.role !== 'admin') {
-      return { submission: null, error: 'Aksyon sa a mande otorizasyon administratè.' };
-    }
+    const admin = this.getAdmin(data.admin_id);
+    if (!admin) return { submission: null, error: 'Aksyon sa a mande otorizasyon administratè.' };
 
     const val = validateContributionAmount(data.amount_centavos);
-    if (!val.valid) {
-      return { submission: null, error: val.error };
-    }
+    if (!val.valid) return { submission: null, error: val.error };
 
     const driver = this.profiles.find((p) => p.id === data.driver_id);
-    if (!driver) {
-      return { submission: null, error: 'Chofè a pa jwenn.' };
+    if (!driver) return { submission: null, error: 'Chofè a pa jwenn.' };
+
+    if (findDuplicateWorkDateSubmission(this.submissions, data.driver_id, data.work_date)) {
+      return {
+        submission: null,
+        error: `Chofè sa a deja gen yon kontribisyon pou dat travay ${data.work_date}.`,
+      };
     }
 
+    const now = new Date().toISOString();
     const newSub: ContributionSubmission = {
-      id: `sub-${Date.now()}`,
+      id: `sub-${Date.now()}-${this.submissions.length}`,
       driver_id: driver.id,
       driver_name: driver.full_name,
       work_date: data.work_date,
@@ -682,263 +716,196 @@ class DemoStorage {
       status: 'APPROVED',
       reviewed_by: admin.id,
       reviewed_by_name: admin.full_name,
-      reviewed_at: new Date().toISOString(),
-      created_at: new Date().toISOString(),
+      reviewed_at: now,
+      created_at: now,
     };
-
     this.submissions.push(newSub);
-
-    this.auditLogs.push({
-      id: `aud-${Date.now()}`,
+    this.log({
       action: 'DIRECT_CONTRIBUTION',
       entity_type: 'submission',
       entity_id: newSub.id,
       actor_id: admin.id,
       actor_name: admin.full_name,
       actor_role: 'admin',
-      details: `Anrejistre kontribisyon dirèk R$ ${(data.amount_centavos / 100).toFixed(2)} pou ${driver.full_name}`,
-      created_at: new Date().toISOString(),
+      details: `Anrejistre kontribisyon dirèk ${brl(data.amount_centavos)} pou ${driver.full_name}`,
     });
-
     this.saveToStorage();
-    return { submission: newSub };
+    this.notifyBalanceListeners();
+    return { submission: { ...newSub } };
   }
 
-  // --- SCHEDULED WITHDRAWAL WORKFLOW ---
+  // --- PIX Settings ---
+  public getPixSettings(): PixSettings {
+    return { ...this.pixSettings };
+  }
 
-  /**
-   * Step 1: Schedule an upcoming withdrawal (does NOT reduce official balance)
-   */
-  public scheduleWithdrawal(data: {
-    admin_id: string;
-    description: string;
-    amount_centavos: number;
-    scheduled_date: string;
-    scheduled_time?: string;
-    note?: string;
-  }): { withdrawal: ScheduledWithdrawal | null; error?: string } {
-    const admin = this.profiles.find((p) => p.id === data.admin_id);
-    if (!admin || admin.role !== 'admin') {
-      return {
-        withdrawal: null,
-        error: 'Aksyon sa a mande otorizasyon administratè oswa trezorye.',
-      };
+  public updatePixSettings(
+    data: Partial<PixSettings>,
+    adminId: string
+  ): { success: boolean; settings?: PixSettings; error?: string } {
+    const admin = this.getAdmin(adminId);
+    if (!admin) {
+      return { success: false, error: 'Aksyon sa a mande otorizasyon administratè.' };
+    }
+    this.pixSettings = {
+      ...this.pixSettings,
+      ...data,
+      updated_at: new Date().toISOString(),
+    };
+    this.log({
+      action: 'UPDATE_PIX_SETTINGS',
+      entity_type: 'pix_settings',
+      entity_id: '1',
+      actor_id: admin.id,
+      actor_name: admin.full_name,
+      actor_role: 'admin',
+      details: `Mete ajou konfigirasyon PIX (Kle: ${this.pixSettings.pix_key})`,
+    });
+    this.saveToStorage();
+    return { success: true, settings: { ...this.pixSettings } };
+  }
+
+  // --- Public Donation Submissions ---
+  public submitPublicDonation(data: {
+    donor_name: string;
+    donor_contact?: string;
+    amount_cents: number;
+    payment_date: string;
+    receipt_storage_path: string;
+    message?: string;
+  }): { submission: PublicDonationSubmission | null; error?: string } {
+    if (!data.donor_name || data.donor_name.trim().length < 2) {
+      return { submission: null, error: 'Tanpri bay non konplè ou.' };
+    }
+    if (!data.amount_cents || data.amount_cents <= 0) {
+      return { submission: null, error: 'Montan donasyon an dwe valab epi plis pase R$ 0,00.' };
+    }
+    if (!data.payment_date) {
+      return { submission: null, error: 'Tanpri chwazi dat peman an.' };
+    }
+    if (!data.receipt_storage_path) {
+      return { submission: null, error: 'Resi peman an obligatwa.' };
     }
 
-    if (!data.amount_centavos || data.amount_centavos <= 0) {
-      return { withdrawal: null, error: 'Montan retrè a dwe plis pase R$ 0,00.' };
-    }
-
-    if (!data.description || data.description.trim().length < 3) {
-      return {
-        withdrawal: null,
-        error: 'Deskripsyon retrè a dwe gen omwen 3 karaktè.',
-      };
-    }
-
-    const newWth: ScheduledWithdrawal = {
-      id: `wth-${Date.now()}`,
-      description: data.description.trim(),
-      amount_centavos: data.amount_centavos,
-      scheduled_date: data.scheduled_date,
-      scheduled_time: data.scheduled_time,
-      status: 'Pwograme',
-      created_by: admin.id,
-      created_by_name: admin.full_name,
-      note: data.note,
-      created_at: new Date().toISOString(),
+    const now = new Date().toISOString();
+    const newDonation: PublicDonationSubmission = {
+      id: `don-${Date.now()}-${this.donationSubmissions.length}`,
+      donor_name: data.donor_name.trim(),
+      donor_contact: data.donor_contact?.trim(),
+      amount_cents: data.amount_cents,
+      amount_centavos: data.amount_cents,
+      payment_date: data.payment_date,
+      receipt_storage_path: data.receipt_storage_path,
+      message: data.message?.trim(),
+      status: 'pending',
+      created_at: now,
+      updated_at: now,
     };
 
-    this.withdrawals.push(newWth);
-
-    this.auditLogs.push({
-      id: `aud-${Date.now()}`,
-      action: 'SCHEDULE_WITHDRAWAL',
-      entity_type: 'withdrawal',
-      entity_id: newWth.id,
-      actor_id: admin.id,
-      actor_name: admin.full_name,
-      actor_role: 'admin',
-      details: `Pwograme retrè R$ ${(data.amount_centavos / 100).toFixed(2)} pou dat ${data.scheduled_date}: ${data.description}`,
-      created_at: new Date().toISOString(),
-    });
-
+    this.donationSubmissions.push(newDonation);
     this.saveToStorage();
-    return { withdrawal: newWth };
+    // CRITICAL: Uploading a receipt MUST NEVER automatically increase the global balance!
+    return { submission: { ...newDonation } };
   }
 
-  /**
-   * Step 5: Execute a scheduled withdrawal (explicit confirmation reduces official balance exactly once)
-   */
-  public executeWithdrawal(
-    withdrawalId: string,
+  public getAllDonationSubmissions(): PublicDonationSubmission[] {
+    return clone(this.donationSubmissions).sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+  }
+
+  public getPendingDonationSubmissions(): PublicDonationSubmission[] {
+    return this.donationSubmissions
+      .filter((d) => d.status === 'pending' || d.status === 'PENDING')
+      .map((d) => ({ ...d }))
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  }
+
+  public approveDonationSubmission(
+    donationId: string,
     adminId: string
   ): { success: boolean; error?: string } {
-    const admin = this.profiles.find((p) => p.id === adminId);
-    if (!admin || admin.role !== 'admin') {
-      return {
-        success: false,
-        error: 'Aksyon sa a mande otorizasyon administratè oswa trezorye.',
-      };
+    const admin = this.getAdmin(adminId);
+    if (!admin) {
+      return { success: false, error: 'Aksyon sa a mande otorizasyon administratè oswa trezorye.' };
     }
 
-    const wth = this.withdrawals.find((w) => w.id === withdrawalId);
-    if (!wth) {
-      return { success: false, error: 'Retrè pwograme sa a pa jwenn nan sistèm nan.' };
+    const donation = this.donationSubmissions.find((d) => d.id === donationId);
+    if (!donation) {
+      return { success: false, error: 'Donasyon sa a pa jwenn nan sistèm nan.' };
     }
 
-    if (wth.status === 'Egzekite') {
-      return {
-        success: false,
-        error: 'Retrè sa a te deja egzekite. Li pa ka egzekite de fwa.',
-      };
+    if (donation.status === 'approved' || donation.status === 'APPROVED') {
+      return { success: true }; // Idempotent
     }
 
-    if (wth.status === 'Anile') {
-      return {
-        success: false,
-        error: 'Retrè sa a te anile deja. Ou pa ka egzekite yon retrè ki anile.',
-      };
+    if (donation.status !== 'pending' && donation.status !== 'PENDING') {
+      return { success: false, error: 'Donasyon sa a pa nan eta An Atant ankò.' };
     }
 
-    // Execute withdrawal
-    wth.status = 'Egzekite';
-    wth.executed_by = admin.id;
-    wth.executed_by_name = admin.full_name;
-    wth.executed_at = new Date().toISOString();
-    wth.updated_at = new Date().toISOString();
+    const now = new Date().toISOString();
+    donation.status = 'approved';
+    donation.reviewed_by = admin.id;
+    donation.reviewed_at = now;
+    donation.updated_at = now;
 
-    this.auditLogs.push({
-      id: `aud-${Date.now()}`,
-      action: 'EXECUTE_WITHDRAWAL',
-      entity_type: 'withdrawal',
-      entity_id: wth.id,
+    this.log({
+      action: 'APPROVE_DONATION',
+      entity_type: 'donation_submission',
+      entity_id: donation.id,
       actor_id: admin.id,
       actor_name: admin.full_name,
       actor_role: 'admin',
-      details: `Egzekite retrè R$ ${(wth.amount_centavos / 100).toFixed(2)}: ${wth.description}`,
-      created_at: new Date().toISOString(),
+      details: `Apwouve donasyon piblik ${brl(donation.amount_cents)} de ${donation.donor_name}`,
     });
 
     this.saveToStorage();
+    this.notifyBalanceListeners();
     return { success: true };
   }
 
-  /**
-   * Step 6: Cancel a scheduled withdrawal before execution (does not change official balance)
-   */
-  public cancelWithdrawal(
-    withdrawalId: string,
+  public rejectDonationSubmission(
+    donationId: string,
     adminId: string,
     reason: string
   ): { success: boolean; error?: string } {
-    const admin = this.profiles.find((p) => p.id === adminId);
-    if (!admin || admin.role !== 'admin') {
-      return {
-        success: false,
-        error: 'Aksyon sa a mande otorizasyon administratè oswa trezorye.',
-      };
-    }
-
-    const wth = this.withdrawals.find((w) => w.id === withdrawalId);
-    if (!wth) {
-      return { success: false, error: 'Retrè pwograme sa a pa jwenn nan sistèm nan.' };
-    }
-
-    if (wth.status === 'Egzekite') {
-      return {
-        success: false,
-        error: 'Yon retrè ki deja egzekite pa ka anile konsa. Li mande yon koreksyon odite.',
-      };
-    }
-
-    if (wth.status === 'Anile') {
-      return { success: false, error: 'Retrè sa a te deja anile.' };
+    const admin = this.getAdmin(adminId);
+    if (!admin) {
+      return { success: false, error: 'Aksyon sa a mande otorizasyon administratè oswa trezorye.' };
     }
 
     if (!reason || reason.trim().length < 5) {
-      return {
-        success: false,
-        error: 'Tanpri bay yon rezon klè pou anilasyon an (omwen 5 karaktè).',
-      };
+      return { success: false, error: 'Tanpri bay yon rezon klè pou refi a (omwen 5 karaktè).' };
     }
 
-    wth.status = 'Anile';
-    wth.cancelled_by = admin.id;
-    wth.cancelled_by_name = admin.full_name;
-    wth.cancelled_at = new Date().toISOString();
-    wth.cancellation_reason = reason.trim();
-    wth.updated_at = new Date().toISOString();
+    const donation = this.donationSubmissions.find((d) => d.id === donationId);
+    if (!donation) {
+      return { success: false, error: 'Donasyon sa a pa jwenn nan sistèm nan.' };
+    }
 
-    this.auditLogs.push({
-      id: `aud-${Date.now()}`,
-      action: 'CANCEL_WITHDRAWAL',
-      entity_type: 'withdrawal',
-      entity_id: wth.id,
+    if (donation.status !== 'pending' && donation.status !== 'PENDING') {
+      return { success: false, error: 'Donasyon sa a pa nan eta An Atant ankò.' };
+    }
+
+    const now = new Date().toISOString();
+    donation.status = 'rejected';
+    donation.rejection_reason = reason.trim();
+    donation.reviewed_by = admin.id;
+    donation.reviewed_at = now;
+    donation.updated_at = now;
+
+    this.log({
+      action: 'REJECT_DONATION',
+      entity_type: 'donation_submission',
+      entity_id: donation.id,
       actor_id: admin.id,
       actor_name: admin.full_name,
       actor_role: 'admin',
-      details: `Anile retrè R$ ${(wth.amount_centavos / 100).toFixed(2)} (${wth.description}). Rezon: ${reason.trim()}`,
-      created_at: new Date().toISOString(),
+      details: `Refize donasyon de ${donation.donor_name}. Rezon: ${reason.trim()}`,
     });
 
     this.saveToStorage();
     return { success: true };
-  }
-
-  /**
-   * Legacy method maintained for backward compatibility migration
-   */
-  public recordExpense(data: {
-    admin_id: string;
-    amount_centavos: number;
-    expense_date: string;
-    description: string;
-    category: string;
-    reference_note?: string;
-  }): { expense: ExpenseRecord | null; error?: string } {
-    // Automatically route through withdrawal system as executed withdrawal
-    const res = this.scheduleWithdrawal({
-      admin_id: data.admin_id,
-      description: data.description,
-      amount_centavos: data.amount_centavos,
-      scheduled_date: data.expense_date,
-      note: data.reference_note,
-    });
-
-    if (res.error || !res.withdrawal) {
-      return { expense: null, error: res.error };
-    }
-
-    this.executeWithdrawal(res.withdrawal.id, data.admin_id);
-
-    return {
-      expense: {
-        id: res.withdrawal.id,
-        amount_centavos: data.amount_centavos,
-        expense_date: data.expense_date,
-        description: data.description,
-        category: data.category,
-        authorized_by: data.admin_id,
-        authorized_by_name: 'Admin',
-        created_at: new Date().toISOString(),
-      },
-    };
-  }
-
-  public getAllExpenses(): ExpenseRecord[] {
-    return this.withdrawals
-      .filter((w) => w.status === 'Egzekite')
-      .map((w) => ({
-        id: w.id,
-        amount_centavos: w.amount_centavos,
-        expense_date: w.scheduled_date,
-        description: w.description,
-        category: 'Retrè',
-        authorized_by: w.executed_by || w.created_by,
-        authorized_by_name: w.executed_by_name || w.created_by_name,
-        created_at: w.created_at,
-      }));
   }
 }
 

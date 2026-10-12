@@ -7,6 +7,7 @@ import { repository } from '@/lib/repository';
 import { ContributionSubmission, UserProfile } from '@/lib/types';
 import { formatBRL, formatDateCreole } from '@/lib/formatters';
 import { StatusBadge } from '@/components/StatusBadge';
+import { GlobalContributionBalance } from '@/components/GlobalContributionBalance';
 import {
   Car,
   PlusCircle,
@@ -25,7 +26,7 @@ export default function DriverDashboardPage() {
 
   useEffect(() => {
     async function loadData() {
-      const user = demoStorage.getCurrentUser();
+      const user = await repository.getAuthUser();
       setCurrentUser(user);
       if (user) {
         const userSubs = await repository.getDriverSubmissions(user.id);
@@ -69,6 +70,12 @@ export default function DriverDashboardPage() {
           Soumèt Kontribisyon
         </Link>
       </div>
+
+      {/* Global Fund Total (Visible throughout the application) */}
+      <GlobalContributionBalance
+        variant="compact"
+        label="Kantite Kòb ki Ranmase (Fon Global)"
+      />
 
       {/* Driver Personal Metrics */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

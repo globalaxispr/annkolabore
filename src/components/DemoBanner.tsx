@@ -3,15 +3,16 @@
 import React, { useState, useEffect } from 'react';
 import { repository } from '@/lib/repository';
 import { demoStorage, DEMO_PROFILES } from '@/lib/demo-storage';
+import { UserProfile } from '@/lib/types';
 import { AlertTriangle, UserCheck, RefreshCw } from 'lucide-react';
 
 export const DemoBanner: React.FC<{ onUserChange?: () => void }> = ({ onUserChange }) => {
-  const [currentUser, setCurrentUser] = useState(repository.currentUser);
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
-    setCurrentUser(demoStorage.getCurrentUser());
+    setCurrentUser(repository.getCurrentUser());
   }, []);
 
   if (!mounted || !repository.isDemo) {

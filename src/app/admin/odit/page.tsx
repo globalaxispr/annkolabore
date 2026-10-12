@@ -73,7 +73,7 @@ export default function AuditTrailPage() {
             Istwa Odit
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-            Tout aksyon finansye, apwobasyon, refi, ak depans anrejistre avèk non aktè a ak dat egzat
+            Tout aksyon finansye, apwobasyon, refi, ak antre dirèk anrejistre avèk non aktè a ak dat egzat
           </p>
         </div>
 

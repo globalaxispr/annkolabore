@@ -37,8 +37,8 @@ export default function MembersAdminPage() {
     const today = new Date().toISOString().split('T')[0];
     setDirectWorkDate(today);
     setDirectPaymentDate(today);
-    const user = demoStorage.getCurrentUser();
-    setCurrentUser(user);
+    const authUser = await repository.getAuthUser();
+    setCurrentUser(authUser);
     const m = await repository.getAllMembers();
     const s = await repository.getAllSubmissions();
     setMembers(m);

@@ -3,42 +3,46 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { demoStorage } from '@/lib/demo-storage';
 import { repository } from '@/lib/repository';
-import { Car, Lock, Mail, ArrowRight, AlertTriangle, ShieldCheck } from 'lucide-react';
+import { demoStorage } from '@/lib/demo-storage';
+import { Lock, Mail, AlertTriangle, Loader2 } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
+    setSubmitting(true);
 
-    // In demo mode: find user by email
-    const allUsers = demoStorage.getAllProfiles();
-    const found = allUsers.find((u) => u.email.toLowerCase() === email.toLowerCase());
+    try {
+      const res = await repository.signIn(email, password);
+      if (res.error) {
+        setErrorMsg(res.error);
+        return;
+      }
 
-    if (!found) {
-      setErrorMsg('Nou pa jwenn okenn kont avèk adrès imèl sa a.');
-      return;
-    }
-
-    demoStorage.setCurrentUser(found.id);
-    if (found.role === 'admin') {
-      router.push('/admin/atant');
-    } else {
-      router.push('/chofe');
+      if (res.user) {
+        if (res.user.role === 'admin') {
+          router.push('/admin');
+        } else {
+          router.push('/chofe');
+        }
+      }
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const handleQuickDemoLogin = (userId: string) => {
-    demoStorage.setCurrentUser(userId);
-    const user = demoStorage.getCurrentUser();
+    repository.switchDemoUser(userId);
+    const user = repository.getCurrentUser();
     if (user?.role === 'admin') {
-      router.push('/admin/atant');
+      router.push('/admin');
     } else {
       router.push('/chofe');
     }
@@ -74,7 +78,7 @@ export default function LoginPage() {
               <input
                 type="email"
                 required
-                placeholder="chofe@legliz.test"
+                placeholder="chofe@egzanp.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-600"
@@ -83,12 +87,21 @@ export default function LoginPage() {
           </div>
 
           <div>
-            <label className="block font-bold uppercase text-slate-600 mb-1.5">
-              Modpas *
-            </label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label htmlFor="login-password" className="block font-bold uppercase text-slate-600">
+                Modpas *
+              </label>
+              <Link
+                href="/auth/esqueci-senha"
+                className="text-xs text-emerald-700 hover:text-emerald-800 font-semibold hover:underline"
+              >
+                Ou bliye modpas ou?
+              </Link>
+            </div>
             <div className="relative">
               <Lock className="w-4 h-4 absolute left-3.5 top-3 text-slate-400" />
               <input
+                id="login-password"
                 type="password"
                 required
                 placeholder="••••••••"
@@ -101,34 +114,40 @@ export default function LoginPage() {
 
           <button
             type="submit"
-            className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm shadow-xs transition"
+            disabled={submitting}
+            className="w-full py-3 rounded-xl bg-slate-900 hover:bg-black text-white font-bold text-sm shadow-xs transition flex items-center justify-center gap-2 disabled:opacity-70"
           >
+            {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
             Konekte
           </button>
         </form>
 
-        {/* Demo Quick login shortcuts */}
-        <div className="pt-4 border-t border-slate-100 space-y-2">
-          <div className="text-[11px] font-bold text-slate-400 uppercase text-center">
-            Aksè Rapid (Mod Demo)
+        {/* Demo Quick login shortcuts - Only shown during development demo mode */}
+        {repository.isDemo && (
+          <div className="pt-4 border-t border-slate-100 space-y-2">
+            <div className="text-[11px] font-bold text-slate-400 uppercase text-center">
+              Aksè Rapid (Mod Demo Sèlman)
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => handleQuickDemoLogin('usr-driver-01')}
+                className="p-2.5 bg-slate-50 hover:bg-emerald-50 border border-slate-200 rounded-xl text-left text-xs transition"
+              >
+                <div className="font-bold text-slate-800">Jean Baptiste Pierre</div>
+                <div className="text-[11px] text-emerald-700 font-medium">Konekte kòm Chofè</div>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleQuickDemoLogin('usr-admin-01')}
+                className="p-2.5 bg-slate-50 hover:bg-amber-50 border border-slate-200 rounded-xl text-left text-xs transition"
+              >
+                <div className="font-bold text-slate-800">Frantz Augustin</div>
+                <div className="text-[11px] text-amber-700 font-medium">Konekte kòm Trezorye</div>
+              </button>
+            </div>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <button
-              onClick={() => handleQuickDemoLogin('usr-driver-01')}
-              className="p-2.5 bg-slate-50 hover:bg-emerald-50 border border-slate-200 rounded-xl text-left text-xs transition"
-            >
-              <div className="font-bold text-slate-800">Jean Baptiste Pierre</div>
-              <div className="text-[11px] text-emerald-700 font-medium">Konekte kòm Chofè</div>
-            </button>
-            <button
-              onClick={() => handleQuickDemoLogin('usr-admin-01')}
-              className="p-2.5 bg-slate-50 hover:bg-amber-50 border border-slate-200 rounded-xl text-left text-xs transition"
-            >
-              <div className="font-bold text-slate-800">Frantz Augustin</div>
-              <div className="text-[11px] text-amber-700 font-medium">Konekte kòm Trezorye</div>
-            </button>
-          </div>
-        </div>
+        )}
 
         <div className="text-center text-xs text-slate-500 pt-2">
           Ou poko gen yon kont?{' '}

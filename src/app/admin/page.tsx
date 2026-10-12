@@ -3,11 +3,10 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { repository } from '@/lib/repository';
-import { FinancialSummary, ContributionSubmission, ScheduledWithdrawal } from '@/lib/types';
-import { formatBRL } from '@/lib/formatters';
+import { ContributionSubmission, UserProfile } from '@/lib/types';
+import { GlobalContributionBalance } from '@/components/GlobalContributionBalance';
 import {
   FileCheck2,
-  CalendarClock,
   Users,
   BarChart3,
   History,
@@ -17,20 +16,20 @@ import {
 } from 'lucide-react';
 
 export default function AdminDashboardIndex() {
-  const [summary, setSummary] = useState<FinancialSummary | null>(null);
   const [pendingSubs, setPendingSubs] = useState<ContributionSubmission[]>([]);
-  const [scheduledWithdrawals, setScheduledWithdrawals] = useState<ScheduledWithdrawal[]>([]);
+  const [members, setMembers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function load() {
-      const sum = await repository.getFinancialSummary();
-      const subs = await repository.getPendingSubmissions();
-      const sched = await repository.getScheduledWithdrawals();
-      setSummary(sum);
-      setPendingSubs(subs);
-      setScheduledWithdrawals(sched);
-      setLoading(false);
+      try {
+        const subs = await repository.getPendingSubmissions();
+        const mems = await repository.getAllMembers();
+        setPendingSubs(subs);
+        setMembers(mems);
+      } finally {
+        setLoading(false);
+      }
     }
     load();
   }, []);
@@ -48,28 +47,21 @@ export default function AdminDashboardIndex() {
             Jesyon Finansye Gwoup la
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 mt-1">
-            Apwouve kontribisyon, planifye retrè, epi verifye bilan finansye ofisyèl la
+            Apwouve kontribisyon chofè yo, jere manm yo, epi verifye bilan finansye ofisyèl la
           </p>
         </div>
 
-        {/* Available Balance Pill */}
-        {summary && (
-          <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 min-w-[220px]">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">
-              Balans Disponib
-            </span>
-            <div className="text-2xl font-black text-slate-900 font-mono mt-1">
-              {formatBRL(summary.current_balance_centavos)}
-            </div>
-            <span className="text-[10px] text-slate-400 block mt-0.5">
-              Kòb ofisyèl nan kès la
-            </span>
-          </div>
-        )}
+        {/* Global Live Contribution Balance in Admin Header */}
+        <div className="w-full md:w-auto min-w-[240px]">
+          <GlobalContributionBalance
+            variant="compact"
+            label="Kantite Kòb ki Ranmase"
+          />
+        </div>
       </div>
 
       {/* Action Hub Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Kontribisyon an Atant */}
         <Link
           href="/admin/atant"
@@ -93,29 +85,6 @@ export default function AdminDashboardIndex() {
           </div>
         </Link>
 
-        {/* Retrè Pwograme */}
-        <Link
-          href="/admin/retre"
-          className="bg-white p-6 rounded-3xl border border-slate-100 shadow-xs hover:border-slate-300 transition group space-y-3"
-        >
-          <div className="flex items-center justify-between">
-            <div className="w-10 h-10 rounded-2xl bg-slate-100 text-slate-800 flex items-center justify-center">
-              <CalendarClock className="w-5 h-5" />
-            </div>
-            {scheduledWithdrawals.length > 0 && (
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-900 text-white">
-                {scheduledWithdrawals.length} pwograme
-              </span>
-            )}
-          </div>
-          <div>
-            <h2 className="text-base font-bold text-slate-900">Retrè Pwograme</h2>
-            <p className="text-xs text-slate-500 mt-1">
-              Planifye retrè davans epi egzekite yo ofisyèlman lè lajan an retire.
-            </p>
-          </div>
-        </Link>
-
         {/* Manm Gwoup la */}
         <Link
           href="/admin/manm"
@@ -127,7 +96,7 @@ export default function AdminDashboardIndex() {
           <div>
             <h2 className="text-base font-bold text-slate-900">Manm Gwoup la</h2>
             <p className="text-xs text-slate-500 mt-1">
-              Gade lis chofè yo, total chak chofè kontribye, epi anrejistre antre dirèk.
+              Gade lis chofè yo ({members.filter((m) => m.role === 'driver').length} chofè), epi anrejistre antre dirèk.
             </p>
           </div>
         </Link>
@@ -143,7 +112,7 @@ export default function AdminDashboardIndex() {
           <div>
             <h2 className="text-base font-bold text-slate-900">Rapò Finansye</h2>
             <p className="text-xs text-slate-500 mt-1">
-              Bilan konplè tout kontribisyon ak retrè, total mwa, ak opsyon enprime.
+              Bilan konplè tout kontribisyon ofisyèl yo, total mwa, ak opsyon enprime.
             </p>
           </div>
         </Link>
@@ -159,7 +128,7 @@ export default function AdminDashboardIndex() {
           <div>
             <h2 className="text-base font-bold text-slate-900">Istwa Odit</h2>
             <p className="text-xs text-slate-500 mt-1">
-              Tras enchanjab tout aksyon trezorye a (apwobasyon, refi, retrè, modifikasyon).
+              Tras enchanjab tout aksyon trezorye a (apwobasyon, refi, antre dirèk).
             </p>
           </div>
         </Link>

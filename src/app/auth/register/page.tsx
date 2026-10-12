@@ -3,9 +3,9 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { demoStorage } from '@/lib/demo-storage';
+import { repository } from '@/lib/repository';
 import { registerSchema } from '@/lib/validations';
-import { UserPlus, User, Mail, Lock, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { UserPlus, User, Mail, Lock, AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -15,16 +15,18 @@ export default function RegisterPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
 
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const handleRegister = (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
+    setSuccessMsg(null);
 
     // Validate using Zod schema
     const validationResult = registerSchema.safeParse({
-      full_name: fullName,
-      email: email,
+      full_name: fullName.trim(),
+      email: email.trim(),
       password: password,
       confirm_password: confirmPassword,
     });
@@ -36,28 +38,35 @@ export default function RegisterPage() {
 
     setSubmitting(true);
 
-    // Register user in demo storage
-    const res = demoStorage.registerUser(fullName.trim(), email.trim());
-    if (res.error) {
-      setErrorMsg(res.error);
-      setSubmitting(false);
-      return;
-    }
+    try {
+      const res = await repository.signUp(email, password, fullName);
+      if (res.error) {
+        setErrorMsg(res.error);
+        return;
+      }
 
-    // Success -> redirect to driver dashboard
-    router.push('/chofe');
+      setSuccessMsg(
+        'Kont ou a kreye avèk siksè kòm Chofè! W ap redirije nan espas ou a...'
+      );
+
+      setTimeout(() => {
+        router.push('/chofe');
+      }, 1500);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
     <div className="max-w-md mx-auto my-8 space-y-6">
       <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-100 shadow-xs space-y-6">
         <div className="text-center space-y-2">
-          <div className="w-12 h-12 bg-emerald-600 rounded-2xl mx-auto flex items-center justify-center text-white shadow-md shadow-emerald-600/20">
-            <UserPlus className="w-6 h-6" />
+          <div className="w-12 h-12 bg-slate-900 rounded-2xl mx-auto flex items-center justify-center text-white shadow-md">
+            <UserPlus className="w-6 h-6 text-emerald-400" />
           </div>
           <h1 className="text-2xl font-black text-slate-900 tracking-tight">Kreye Kont</h1>
           <p className="text-xs text-slate-500">
-            Enskri kòm chofè pou w ka kòmanse soumèt kontribisyon ou
+            Enskri kòm chofè pou w ka kòmanse soumèt kontribisyon ou pou legliz la
           </p>
         </div>
 
@@ -65,6 +74,13 @@ export default function RegisterPage() {
           <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
             <span>{errorMsg}</span>
+          </div>
+        )}
+
+        {successMsg && (
+          <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>{successMsg}</span>
           </div>
         )}
 
@@ -88,7 +104,7 @@ export default function RegisterPage() {
 
           <div>
             <label className="block font-bold uppercase text-slate-600 mb-1.5">
-              Adrès Imèl *
+              Imèl *
             </label>
             <div className="relative">
               <Mail className="w-4 h-4 absolute left-3.5 top-3 text-slate-400" />
@@ -105,7 +121,7 @@ export default function RegisterPage() {
 
           <div>
             <label className="block font-bold uppercase text-slate-600 mb-1.5">
-              Modpas (omwen 6 karaktè) *
+              Modpas *
             </label>
             <div className="relative">
               <Lock className="w-4 h-4 absolute left-3.5 top-3 text-slate-400" />
@@ -122,7 +138,7 @@ export default function RegisterPage() {
 
           <div>
             <label className="block font-bold uppercase text-slate-600 mb-1.5">
-              Konfime Modpas la *
+              Konfime Modpas *
             </label>
             <div className="relative">
               <Lock className="w-4 h-4 absolute left-3.5 top-3 text-slate-400" />
@@ -144,9 +160,10 @@ export default function RegisterPage() {
           <button
             type="submit"
             disabled={submitting}
-            className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-sm shadow-xs transition"
+            className="w-full py-3 rounded-xl bg-slate-900 hover:bg-black disabled:opacity-50 text-white font-bold text-sm shadow-xs transition flex items-center justify-center gap-2"
           >
-            {submitting ? 'Kreyasyon an kouran...' : 'Kreye Kont Mwen'}
+            {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
+            Kreye Kont
           </button>
         </form>
 

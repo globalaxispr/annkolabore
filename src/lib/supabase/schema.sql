@@ -1,2 +1,2 @@
--- Copy of supabase/migrations/20261012000000_church_drivers_schema.sql for in-app documentation & local scripts
--- See supabase/migrations/20261012000000_church_drivers_schema.sql for the authoritative migration file.
+-- Copy of supabase/migrations/20261012000000_church_drivers_schema.sql for reference
+-- Refer to supabase/migrations/20261012000000_church_drivers_schema.sql for the complete authoritative script.

@@ -40,3 +40,12 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# backups and private uploads
+*.sql.bak
+*.dump
+*.backup
+/backups/
+/uploads/
+/receipts/
+*.log

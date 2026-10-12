@@ -38,7 +38,11 @@ export default function SubmitContributionPage() {
     const today = new Date().toISOString().split('T')[0];
     setWorkDate(today);
     setPaymentDate(today);
-    setCurrentUser(demoStorage.getCurrentUser());
+    async function loadUser() {
+      const user = await repository.getAuthUser();
+      setCurrentUser(user);
+    }
+    loadUser();
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {

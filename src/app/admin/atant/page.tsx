@@ -37,8 +37,8 @@ export default function PendingApprovalsPage() {
 
   const loadPending = async () => {
     setLoading(true);
-    const user = demoStorage.getCurrentUser();
-    setCurrentUser(user);
+    const authUser = await repository.getAuthUser();
+    setCurrentUser(authUser);
     const list = await repository.getPendingSubmissions();
     setPendingList(list);
     setLoading(false);
@@ -120,7 +120,7 @@ export default function PendingApprovalsPage() {
         <div className="bg-rose-50 border border-rose-200 p-4 rounded-2xl text-xs sm:text-sm text-rose-800 flex items-start gap-3">
           <ShieldAlert className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
           <div>
-            <strong>Atansyon:</strong> Ou konekte kounye a kòm yon chofè senp. Pou fè apwobasyon oswa refi, tanpri chanje wòl ou nan banyè demo ki anwo a pou chwazi <em>Trezorye: Frantz Augustin</em>.
+            <strong>Aksè Refize:</strong> Ou pa gen privilèj administratè pou fè apwobasyon oswa refi. Sèlman yon administratè otorize ka valide kontribisyon sa yo.
           </div>
         </div>
       )}
