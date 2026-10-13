@@ -872,12 +872,14 @@ export const repository = {
         return { error: 'Ou dwe konekte pou w ka soumèt yon kontribisyon.' };
       }
 
-      // Check duplicate work_date
+      // Check duplicate work_date (rejected submissions may be re-submitted)
       const { data: existing } = await supabase
         .from('contribution_submissions')
         .select('id, status')
         .eq('driver_id', driverId)
         .eq('work_date', data.work_date)
+        .neq('status', 'rejected')
+        .limit(1)
         .maybeSingle();
 
       if (existing) {
@@ -889,21 +891,30 @@ export const repository = {
         }
       }
 
+      // Only columns that exist in public.contribution_submissions are sent.
+      // The receipt is OPTIONAL: receipt_path is included only when a real path exists.
+      const payload: Record<string, unknown> = {
+        driver_id: driverId,
+        work_date: data.work_date,
+        amount_cents: amount,
+        payment_method: data.payment_method,
+        payment_date: data.payment_date || data.work_date,
+        status: 'pending',
+      };
+      if (data.transaction_ref) payload.payment_reference = data.transaction_ref;
+      if (data.note) payload.note = data.note;
+      if (data.receipt_storage_path) payload.receipt_path = data.receipt_storage_path;
+
       const { data: inserted, error: insertError } = await supabase
         .from('contribution_submissions')
-        .insert({
-          driver_id: driverId,
-          work_date: data.work_date,
-          amount_cents: amount,
-          payment_method: data.payment_method,
-          payment_date: data.payment_date || data.work_date,
-          receipt_storage_path: data.receipt_storage_path || null,
-          status: 'pending',
-        })
+        .insert(payload)
         .select()
         .single();
 
       if (insertError) {
+        if (insertError.code === '23505') {
+          return { error: 'Ou gen yon kontribisyon ki deja egziste pou jou travay sa a.' };
+        }
         return { error: 'Erè pandan anrejistreman kontribisyon an: ' + insertError.message };
       }
 
@@ -952,34 +963,49 @@ export const repository = {
         return { error: 'Otorizasyon manke.' };
       }
 
-      const { data: inserted, error: insertError } = await supabase
-        .from('contribution_submissions')
-        .insert({
-          driver_id: data.driver_id,
-          work_date: data.work_date,
-          amount_cents: amount,
-          payment_method: data.payment_method,
-          payment_date: data.payment_date,
-          status: 'approved',
-          reviewed_by: adminId,
-          reviewed_at: new Date().toISOString(),
-          notes: noteText || null,
-        })
-        .select()
-        .single();
-
-      if (insertError) {
-        return { error: 'Erè pandan anrejistreman dirèk la: ' + insertError.message };
+      if (amount < MINIMUM_CONTRIBUTION_CENTAVOS) {
+        return { error: 'Kontribisyon an dwe omwen R$ 10,00.' };
       }
 
-      await supabase.from('financial_transactions').insert({
-        contribution_submission_id: inserted.id,
-        driver_id: data.driver_id,
-        amount_cents: amount,
-        transaction_type: 'CONTRIBUTION',
+      // Atomic, admin-only, idempotent-by-unique-index RPC: creates the approved
+      // submission, the single ledger entry and the audit log in ONE transaction.
+      // (Direct client INSERTs are blocked by RLS for admins and would risk a
+      // submission without a ledger row or a duplicate credit.)
+      const { data: newId, error: rpcError } = await supabase.rpc('admin_record_contribution', {
+        p_driver_id: data.driver_id,
+        p_work_date: data.work_date,
+        p_payment_date: data.payment_date,
+        p_amount_cents: amount,
+        p_payment_method: data.payment_method,
+        p_note: noteText || null,
       });
 
-      return { submission: inserted as ContributionSubmission };
+      if (rpcError) {
+        if (rpcError.code === 'PGRST202') {
+          return {
+            error:
+              'Fonksyon baz done admin_record_contribution poko enstale. Egzekite migrasyon 20261013000000_admin_record_contribution.sql nan Supabase SQL Editor.',
+          };
+        }
+        if (rpcError.code === '23505') {
+          return { error: 'Gen yon kontribisyon ki deja egziste pou chofè sa a nan dat travay sa a.' };
+        }
+        return { error: 'Erè pandan anrejistreman dirèk la: ' + rpcError.message };
+      }
+
+      return {
+        submission: {
+          id: newId as string,
+          driver_id: data.driver_id,
+          work_date: data.work_date,
+          payment_date: data.payment_date,
+          amount_cents: amount,
+          amount_centavos: amount,
+          payment_method: data.payment_method,
+          status: 'approved',
+          reviewed_by: adminId,
+        } as unknown as ContributionSubmission,
+      };
     } catch (err: any) {
       return { error: err.message || 'Erè pandan anrejistreman dirèk la.' };
     }

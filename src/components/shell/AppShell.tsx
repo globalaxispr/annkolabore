@@ -79,7 +79,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
   const currentYear = mounted ? new Date().getFullYear() : 2026;
 
   return (
-    <div className="min-h-screen bg-slate-50/50 flex">
+    <div className="min-h-screen bg-white flex overflow-x-hidden">
       {/* 1. DESKTOP PERMANENT SIDEBAR */}
       <aside
         aria-label="Sidebar prensipal"
@@ -161,7 +161,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
         )}
 
         {/* Main Content */}
-        <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+        <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 pb-[calc(5.5rem+env(safe-area-inset-bottom))] lg:pb-8 min-w-0">
           {children}
         </main>
 
@@ -189,7 +189,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
         {/* Mobile Bottom Thumb Navigation */}
         <nav
           aria-label="Navigasyon mobil"
-          className="lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-md border-t border-slate-200/80 px-3 py-1.5 flex items-center justify-around text-[10px] font-semibold text-slate-500 shadow-lg"
+          className="lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-slate-200 px-3 pt-1.5 pb-[calc(0.375rem+env(safe-area-inset-bottom))] flex items-center justify-around text-[10px] font-semibold text-slate-500 shadow-[0_-4px_16px_rgba(15,23,42,0.06)]"
         >
           <Link
             href="/"

@@ -9,7 +9,6 @@ import { formatBRL } from '@/lib/formatters';
 import {
   Calendar,
   CreditCard,
-  UploadCloud,
   CheckCircle2,
   AlertTriangle,
   ArrowLeft,
@@ -26,7 +25,6 @@ export default function SubmitContributionPage() {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('PIX');
   const [transactionRef, setTransactionRef] = useState('');
   const [note, setNote] = useState('');
-  const [receiptFileName, setReceiptFileName] = useState('');
 
   // Status
   const [submitting, setSubmitting] = useState(false);
@@ -78,7 +76,6 @@ export default function SubmitContributionPage() {
         payment_method: paymentMethod,
         transaction_ref: transactionRef || undefined,
         note: note || undefined,
-        receipt_url: receiptFileName ? `mock-receipt://${receiptFileName}` : undefined,
       });
 
       if (result.error) {
@@ -90,7 +87,6 @@ export default function SubmitContributionPage() {
         // Reset form
         setTransactionRef('');
         setNote('');
-        setReceiptFileName('');
       }
     } catch (err: unknown) {
       setErrorMsg((err as Error).message || 'Gen yon erè ki pase pandan soumisyon an.');
@@ -279,40 +275,7 @@ export default function SubmitContributionPage() {
             />
           </div>
 
-          {/* Receipt Proof Upload */}
-          <div>
-            <label className="block font-bold uppercase text-slate-400 text-[11px] mb-1.5">
-              Prèv Peman / Resi (Opsyonèl)
-            </label>
-            <div className="border border-dashed border-slate-300 rounded-2xl p-4 text-center hover:border-slate-500 transition cursor-pointer bg-slate-50/50">
-              <UploadCloud className="w-6 h-6 mx-auto text-slate-400 mb-1" />
-              <input
-                type="file"
-                accept="image/*,.pdf"
-                id="receipt_file"
-                className="hidden"
-                onChange={(e) => {
-                  if (e.target.files && e.target.files[0]) {
-                    setReceiptFileName(e.target.files[0].name);
-                  }
-                }}
-              />
-              <label htmlFor="receipt_file" className="cursor-pointer">
-                {receiptFileName ? (
-                  <span className="text-xs font-semibold text-emerald-700">
-                    Fichye chwazi: {receiptFileName}
-                  </span>
-                ) : (
-                  <div className="space-y-0.5">
-                    <span className="text-xs font-semibold text-slate-700">
-                      Klike la a pou chaje yon foto resi oswa kapti ekran PIX
-                    </span>
-                    <p className="text-[10px] text-slate-400">PNG, JPG, PDF</p>
-                  </div>
-                )}
-              </label>
-            </div>
-          </div>
+          {/* No receipt is required to submit a contribution. */}
 
           {/* Note */}
           <div>

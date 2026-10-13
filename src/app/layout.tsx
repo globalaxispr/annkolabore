@@ -1,6 +1,14 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { AppShell } from '@/components/shell/AppShell';
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+  themeColor: '#ffffff',
+  colorScheme: 'light',
+};
 
 export const metadata: Metadata = {
   title: 'Sistèm Jesyon Kontribisyon Chofè Legliz',
@@ -14,8 +22,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ht" className="h-full bg-slate-50/50">
-      <body className="min-h-full font-sans text-slate-800 antialiased selection:bg-emerald-100 selection:text-emerald-900">
+    <html lang="ht" className="h-full bg-white">
+      <body className="min-h-full bg-white font-sans text-slate-800 antialiased selection:bg-emerald-100 selection:text-emerald-900">
         <AppShell>{children}</AppShell>
       </body>
     </html>
