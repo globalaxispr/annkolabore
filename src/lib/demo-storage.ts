@@ -535,7 +535,7 @@ class DemoStorage {
   }
 
   public getAllPendingSubmissions(): ContributionSubmission[] {
-    return this.getAllSubmissions().filter((s) => s.status === 'PENDING');
+    return this.getAllSubmissions().filter((s) => s.status.toLowerCase() === 'pending');
   }
 
   public getAllSubmissions(): ContributionSubmission[] {
@@ -713,24 +713,23 @@ class DemoStorage {
       amount_centavos: data.amount_centavos,
       payment_method: data.payment_method,
       note: data.note || 'Anrejistre dirèk pa trezorye',
-      status: 'APPROVED',
-      reviewed_by: admin.id,
-      reviewed_by_name: admin.full_name,
-      reviewed_at: now,
+      status: 'PENDING',
+      created_by: admin.id,
+      created_by_name: admin.full_name,
       created_at: now,
     };
     this.submissions.push(newSub);
     this.log({
-      action: 'DIRECT_CONTRIBUTION',
+      action: 'ADMIN_SUBMIT_CONTRIBUTION',
       entity_type: 'submission',
       entity_id: newSub.id,
       actor_id: admin.id,
       actor_name: admin.full_name,
       actor_role: 'admin',
-      details: `Anrejistre kontribisyon dirèk ${brl(data.amount_centavos)} pou ${driver.full_name}`,
+      details: `Administratè ${admin.full_name} anrejistre kontribisyon an atant ${brl(data.amount_centavos)} pou ${driver.full_name} (Travay: ${data.work_date})`,
     });
     this.saveToStorage();
-    this.notifyBalanceListeners();
+    // Do not notifyBalanceListeners() — balance changes only when approved!
     return { submission: { ...newSub } };
   }
 

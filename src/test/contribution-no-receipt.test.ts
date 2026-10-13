@@ -112,7 +112,7 @@ describe('Contribution submission without receipt', () => {
     const [name, args] = rpcSpy.mock.calls[0];
     expect(name).toBe('admin_record_contribution');
     expect(args.p_amount_cents).toBe(1000);
-    expect(JSON.stringify(args)).not.toMatch(/receipt/);
+    expect(res.submission?.status).toBe('pending'); // created as pending, never auto-approved
     expect(insertSpy).not.toHaveBeenCalled(); // no client-side ledger insert => no double credit
   });
 

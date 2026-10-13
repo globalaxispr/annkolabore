@@ -532,7 +532,7 @@ export const repository = {
 
       const { data, count, error } = await supabase
         .from('contribution_submissions')
-        .select('id, driver_id, amount_cents, work_date, payment_date, reviewed_at, profiles(full_name, avatar_url)', { count: 'exact' })
+        .select('id, driver_id, amount_cents, work_date, payment_date, reviewed_at, profiles!driver_id(full_name, avatar_url)', { count: 'exact' })
         .eq('status', 'approved')
         .order('reviewed_at', { ascending: false })
         .range(from, to);
@@ -661,7 +661,7 @@ export const repository = {
     try {
       const { data, error } = await supabase
         .from('contribution_submissions')
-        .select('*, profiles(full_name, avatar_url)')
+        .select('*, profiles!driver_id(full_name, avatar_url)')
         .eq('status', 'approved')
         .order('reviewed_at', { ascending: false });
 
@@ -721,24 +721,59 @@ export const repository = {
     try {
       const { data, error } = await supabase
         .from('contribution_submissions')
-        .select('*, profiles(full_name, avatar_url)')
+        .select('*, profiles!driver_id(full_name, avatar_url)')
         .eq('status', 'pending')
         .order('created_at', { ascending: true });
 
-      if (error || !data) return [];
+      if (error) {
+        console.error('Erè lekti kontribisyon an atant nan Supabase:', error);
+        throw new Error(error.message || 'Erè lekti kontribisyon an atant yo');
+      }
 
-      return data.map((sub: any) => ({
+      return (data || []).map((sub: any) => ({
         ...sub,
         driver_name: sub.profiles?.full_name || 'Chofè',
         driver_avatar_url: sub.profiles?.avatar_url,
+        amount_centavos: sub.amount_cents ?? sub.amount_centavos,
       }));
-    } catch {
-      return [];
+    } catch (err: any) {
+      console.error('Erè getAllPendingSubmissions:', err);
+      throw err;
     }
   },
 
   async getPendingSubmissions(): Promise<ContributionSubmission[]> {
     return this.getAllPendingSubmissions();
+  },
+
+  /**
+   * Subscribe to real-time changes on contribution_submissions table for admin queue auto-refresh.
+   */
+  subscribeToPendingSubmissions(
+    callback: () => void
+  ): () => void {
+    const supabase = isSupabaseConfigured() ? createClient() : null;
+    if (!supabase) return () => {};
+
+    try {
+      const channel = supabase
+        .channel('admin_pending_submissions_realtime')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'contribution_submissions' },
+          () => {
+            callback();
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    } catch (err) {
+      console.error('Erè Realtime subscribeToPendingSubmissions:', err);
+      return () => {};
+    }
   },
 
   async getAllSubmissions(): Promise<ContributionSubmission[]> {
@@ -753,18 +788,23 @@ export const repository = {
     try {
       const { data, error } = await supabase
         .from('contribution_submissions')
-        .select('*, profiles(full_name, avatar_url)')
+        .select('*, profiles!driver_id(full_name, avatar_url)')
         .order('created_at', { ascending: false });
 
-      if (error || !data) return [];
+      if (error) {
+        console.error('Erè lekti tout kontribisyon nan Supabase:', error);
+        throw new Error(error.message || 'Erè lekti tout kontribisyon yo');
+      }
 
-      return data.map((sub: any) => ({
+      return (data || []).map((sub: any) => ({
         ...sub,
         driver_name: sub.profiles?.full_name || 'Chofè',
         driver_avatar_url: sub.profiles?.avatar_url,
+        amount_centavos: sub.amount_cents ?? sub.amount_centavos,
       }));
-    } catch {
-      return [];
+    } catch (err: any) {
+      console.error('Erè getAllSubmissions:', err);
+      throw err;
     }
   },
 
@@ -967,10 +1007,9 @@ export const repository = {
         return { error: 'Kontribisyon an dwe omwen R$ 10,00.' };
       }
 
-      // Atomic, admin-only, idempotent-by-unique-index RPC: creates the approved
-      // submission, the single ledger entry and the audit log in ONE transaction.
-      // (Direct client INSERTs are blocked by RLS for admins and would risk a
-      // submission without a ledger row or a duplicate credit.)
+      // Atomic, admin-only, idempotent-by-unique-index RPC: creates the pending
+      // submission and the audit log in ONE transaction.
+      // Ledger entry is created ONLY when explicitly approved via approve_contribution.
       const { data: newId, error: rpcError } = await supabase.rpc('admin_record_contribution', {
         p_driver_id: data.driver_id,
         p_work_date: data.work_date,
@@ -1002,8 +1041,8 @@ export const repository = {
           amount_cents: amount,
           amount_centavos: amount,
           payment_method: data.payment_method,
-          status: 'approved',
-          reviewed_by: adminId,
+          status: 'pending',
+          created_by: adminId,
         } as unknown as ContributionSubmission,
       };
     } catch (err: any) {

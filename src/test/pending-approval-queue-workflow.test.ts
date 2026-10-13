@@ -1,0 +1,183 @@
+import { describe, it, expect, beforeEach } from 'vitest';
+import { demoStorage } from '../lib/demo-storage';
+import { repository } from '../lib/repository';
+
+describe('CRITICAL FINANCIAL WORKFLOW — Pending Approval Queue & Admin Workflow', () => {
+  beforeEach(() => {
+    demoStorage.resetDemoData();
+  });
+
+  // TEST 1: Driver submits contribution without receipt: Status is PENDING, not approved
+  it('1. Driver submits contribution without receipt: Status is PENDING, public balance does not change', async () => {
+    const initialBalance = await repository.getPublicGlobalBalance();
+    const initialAmount = initialBalance.total_approved_contributions_centavos;
+
+    const res = demoStorage.submitContribution({
+      driver_id: 'usr-driver-01',
+      work_date: '2026-10-28',
+      payment_date: '2026-10-28',
+      amount_centavos: 2500, // R$ 25,00
+      payment_method: 'PIX',
+      // receipt_url is omitted (optional)
+    });
+
+    expect(res.submission).toBeDefined();
+    expect(res.submission?.status.toLowerCase()).toBe('pending');
+    expect(res.submission?.receipt_url).toBeUndefined();
+
+    // Financial balance MUST NOT increase while pending
+    const afterSubmitBalance = await repository.getPublicGlobalBalance();
+    expect(afterSubmitBalance.total_approved_contributions_centavos).toBe(initialAmount);
+
+    // It MUST appear in the pending queue
+    const pendingList = await repository.getPendingSubmissions();
+    const found = pendingList.find((s) => s.id === res.submission?.id);
+    expect(found).toBeDefined();
+    expect(found?.amount_centavos).toBe(2500);
+    expect(found?.status.toLowerCase()).toBe('pending');
+  });
+
+  // TEST 2: Admin records contribution on behalf of driver: Status is PENDING (never auto-approved)
+  it('2. Administrator records contribution: Status is PENDING and requires explicit approval', async () => {
+    const initialBalance = await repository.getPublicGlobalBalance();
+    const initialAmount = initialBalance.total_approved_contributions_centavos;
+
+    const res = demoStorage.recordDirectContribution({
+      admin_id: 'usr-admin-01',
+      driver_id: 'usr-driver-02',
+      work_date: '2026-10-29',
+      payment_date: '2026-10-29',
+      amount_centavos: 3000, // R$ 30,00
+      payment_method: 'Espès',
+      note: 'Remèt lajan kach bay trezorye',
+    });
+
+    expect(res.error).toBeUndefined();
+    expect(res.submission).toBeDefined();
+    expect(res.submission?.status.toLowerCase()).toBe('pending');
+    expect(res.submission?.created_by).toBe('usr-admin-01');
+
+    // Public balance MUST NOT increase upon creation
+    const afterRecordBalance = await repository.getPublicGlobalBalance();
+    expect(afterRecordBalance.total_approved_contributions_centavos).toBe(initialAmount);
+
+    // MUST appear in /admin/atant pending queue
+    const pendingList = await repository.getPendingSubmissions();
+    const found = pendingList.find((s) => s.id === res.submission?.id);
+    expect(found).toBeDefined();
+    expect(found?.created_by).toBe('usr-admin-01');
+    expect(found?.status.toLowerCase()).toBe('pending');
+  });
+
+  // TEST 3: Admin explicit approval credits balance exactly once
+  it('3. Explicit approval transitions status to APPROVED and credits balance exactly once', async () => {
+    const initialBalance = await repository.getPublicGlobalBalance();
+    const initialAmount = initialBalance.total_approved_contributions_centavos;
+
+    // Submit a pending contribution
+    const submissionRes = demoStorage.submitContribution({
+      driver_id: 'usr-driver-01',
+      work_date: '2026-10-30',
+      payment_date: '2026-10-30',
+      amount_centavos: 1500, // R$ 15,00
+      payment_method: 'PIX',
+    });
+    const subId = submissionRes.submission!.id;
+
+    // Admin explicitly approves it
+    const approveRes = demoStorage.approveSubmission(subId, 'usr-admin-01');
+    expect(approveRes.success).toBe(true);
+
+    // Balance increases by exactly R$ 15,00 (1500 centavos)
+    const afterApproveBalance = await repository.getPublicGlobalBalance();
+    expect(afterApproveBalance.total_approved_contributions_centavos).toBe(initialAmount + 1500);
+
+    // Submission is no longer in pending queue
+    const pendingList = await repository.getPendingSubmissions();
+    expect(pendingList.find((s) => s.id === subId)).toBeUndefined();
+  });
+
+  // TEST 4: Repeated approval is idempotent and cannot double credit
+  it('4. Repeated approval cannot double credit the public balance', async () => {
+    const initialBalance = await repository.getPublicGlobalBalance();
+
+    const submissionRes = demoStorage.submitContribution({
+      driver_id: 'usr-driver-01',
+      work_date: '2026-10-31',
+      payment_date: '2026-10-31',
+      amount_centavos: 2000,
+      payment_method: 'PIX',
+    });
+    const subId = submissionRes.submission!.id;
+
+    // First approval
+    const firstApprove = demoStorage.approveSubmission(subId, 'usr-admin-01');
+    expect(firstApprove.success).toBe(true);
+    const balanceAfterFirst = await repository.getPublicGlobalBalance();
+    expect(balanceAfterFirst.total_approved_contributions_centavos).toBe(
+      initialBalance.total_approved_contributions_centavos + 2000
+    );
+
+    // Second approval attempt on already approved record
+    const secondApprove = demoStorage.approveSubmission(subId, 'usr-admin-01');
+    expect(secondApprove.success).toBe(false); // blocked from re-approving
+
+    // Balance remains exactly the same, no duplicate credit
+    const balanceAfterSecond = await repository.getPublicGlobalBalance();
+    expect(balanceAfterSecond.total_approved_contributions_centavos).toBe(
+      balanceAfterFirst.total_approved_contributions_centavos
+    );
+  });
+
+  // TEST 5: Rejected contribution never credits the balance
+  it('5. Rejection transitions status to REJECTED and NEVER affects the balance', async () => {
+    const initialBalance = await repository.getPublicGlobalBalance();
+
+    const submissionRes = demoStorage.submitContribution({
+      driver_id: 'usr-driver-01',
+      work_date: '2026-11-01',
+      payment_date: '2026-11-01',
+      amount_centavos: 4000,
+      payment_method: 'PIX',
+    });
+    const subId = submissionRes.submission!.id;
+
+    const rejectRes = demoStorage.rejectSubmission(
+      subId,
+      'usr-admin-01',
+      'Montan transfè a pa matche ak prèv la'
+    );
+    expect(rejectRes.success).toBe(true);
+
+    const balanceAfterReject = await repository.getPublicGlobalBalance();
+    expect(balanceAfterReject.total_approved_contributions_centavos).toBe(
+      initialBalance.total_approved_contributions_centavos
+    );
+
+    // Removed from pending queue
+    const pendingList = await repository.getPendingSubmissions();
+    expect(pendingList.find((s) => s.id === subId)).toBeUndefined();
+  });
+
+  // TEST 6: Non-admin users cannot approve or reject
+  it('6. Non-admin users are strictly blocked from approving or rejecting', async () => {
+    const submissionRes = demoStorage.submitContribution({
+      driver_id: 'usr-driver-01',
+      work_date: '2026-11-02',
+      payment_date: '2026-11-02',
+      amount_centavos: 1000,
+      payment_method: 'PIX',
+    });
+    const subId = submissionRes.submission!.id;
+
+    // Driver tries to approve
+    const driverApprove = demoStorage.approveSubmission(subId, 'usr-driver-01');
+    expect(driverApprove.success).toBe(false);
+    expect(driverApprove.error).toContain('mande otorizasyon administratè');
+
+    // Driver tries to reject
+    const driverReject = demoStorage.rejectSubmission(subId, 'usr-driver-01', 'Rezon');
+    expect(driverReject.success).toBe(false);
+    expect(driverReject.error).toContain('mande otorizasyon administratè');
+  });
+});

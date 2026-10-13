@@ -17,12 +17,14 @@ import {
   CreditCard,
   FileText,
   X,
+  RefreshCw,
 } from 'lucide-react';
 
 export default function PendingApprovalsPage() {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [pendingList, setPendingList] = useState<ContributionSubmission[]>([]);
   const [loading, setLoading] = useState(true);
+  const [queryError, setQueryError] = useState<string | null>(null);
 
   // Modals state
   const [detailModalItem, setDetailModalItem] = useState<ContributionSubmission | null>(null);
@@ -36,15 +38,29 @@ export default function PendingApprovalsPage() {
 
   const loadPending = async () => {
     setLoading(true);
-    const authUser = await repository.getAuthUser();
-    setCurrentUser(authUser);
-    const list = await repository.getPendingSubmissions();
-    setPendingList(list);
-    setLoading(false);
+    setQueryError(null);
+    try {
+      const authUser = await repository.getAuthUser();
+      setCurrentUser(authUser);
+      const list = await repository.getPendingSubmissions();
+      setPendingList(list);
+    } catch (err: any) {
+      console.error('Erè pandan rekiperasyon kontribisyon an atant:', err);
+      setQueryError(err?.message || 'Erè pandan rekiperasyon kontribisyon an atant yo.');
+      setPendingList([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
     loadPending();
+    const unsubscribe = repository.subscribeToPendingSubmissions(() => {
+      loadPending();
+    });
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   const handleApprove = async () => {
@@ -106,10 +122,21 @@ export default function PendingApprovalsPage() {
           </p>
         </div>
 
-        <div className="bg-amber-50 px-5 py-3 rounded-2xl border border-amber-100 flex items-center gap-3">
-          <div className="text-2xl font-black text-amber-700">{pendingList.length}</div>
-          <div className="text-xs font-semibold text-amber-900 leading-tight">
-            soumisyon k ap tann apwobasyon
+        <div className="flex items-center gap-3">
+          <button
+            onClick={loadPending}
+            disabled={loading}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl border border-slate-200 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 disabled:opacity-50 transition shadow-xs"
+            title="Rafrechi lis la"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-emerald-600' : 'text-slate-500'}`} />
+            Rafrechi
+          </button>
+          <div className="bg-amber-50 px-5 py-3 rounded-2xl border border-amber-100 flex items-center gap-3">
+            <div className="text-2xl font-black text-amber-700">{pendingList.length}</div>
+            <div className="text-xs font-semibold text-amber-900 leading-tight">
+              soumisyon k ap tann apwobasyon
+            </div>
           </div>
         </div>
       </div>
@@ -121,6 +148,25 @@ export default function PendingApprovalsPage() {
           <div>
             <strong>Aksè Refize:</strong> Ou pa gen privilèj administratè pou fè apwobasyon oswa refi. Sèlman yon administratè otorize ka valide kontribisyon sa yo.
           </div>
+        </div>
+      )}
+
+      {/* Query error alert */}
+      {queryError && (
+        <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-900 text-xs sm:text-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0" />
+            <div>
+              <strong className="block font-semibold">Erè pandan chajman kontribisyon an atant yo:</strong>
+              <span>{queryError}</span>
+            </div>
+          </div>
+          <button
+            onClick={loadPending}
+            className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded-xl text-xs transition shrink-0 shadow-xs"
+          >
+            Re-eseye Chaje
+          </button>
         </div>
       )}
 
@@ -172,11 +218,29 @@ export default function PendingApprovalsPage() {
               >
                 <div className="space-y-1.5 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-base font-bold text-slate-900">{item.driver_name}</span>
+                    <span className="text-base font-bold text-slate-900">{item.driver_name || 'Chofè'}</span>
                     <span className="text-sm font-extrabold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-lg border border-emerald-100">
                       {formatBRL(item.amount_centavos)}
                     </span>
                     <StatusBadge status={item.status} />
+                    {item.created_by ? (
+                      <span className="text-[10px] font-semibold text-indigo-800 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-200">
+                        Soumèt pa Admin
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
+                        Soumèt pa Chofè
+                      </span>
+                    )}
+                    {item.receipt_url || item.receipt_path ? (
+                      <span className="text-[10px] font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                        Gen Resi
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
+                        San Resi (Opsyonèl)
+                      </span>
+                    )}
                   </div>
 
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
@@ -415,14 +479,18 @@ export default function PendingApprovalsPage() {
                 </span>
               </div>
 
-              {detailModalItem.receipt_url && (
-                <div className="py-2">
-                  <span className="text-slate-500 block mb-1">Prèv Peman / Resi:</span>
-                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-center text-slate-600 font-mono text-[11px]">
-                    {detailModalItem.receipt_url}
+              <div className="py-2">
+                <span className="text-slate-500 block mb-1">Prèv Peman / Resi:</span>
+                {detailModalItem.receipt_url || detailModalItem.receipt_path ? (
+                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-center text-slate-700 font-mono text-[11px] break-all">
+                    {detailModalItem.receipt_url || detailModalItem.receipt_path}
                   </div>
-                </div>
-              )}
+                ) : (
+                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-center text-slate-500 text-xs italic">
+                    Pa gen okenn resi tache (Prèv peman an se opsyonèl)
+                  </div>
+                )}
+              </div>
 
               {detailModalItem.note && (
                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">

@@ -31,6 +31,8 @@ export interface ContributionSubmission {
   note?: string;
   status: SubmissionStatus;
   rejection_reason?: string;
+  created_by?: string;
+  created_by_name?: string;
   reviewed_by?: string;
   reviewed_by_name?: string;
   reviewed_at?: string;

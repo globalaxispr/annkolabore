@@ -71,7 +71,7 @@ export default function MembersAdminPage() {
       setDirectError(res.error);
     } else {
       setDirectSuccess(
-        `Kontribisyon ${formatBRL(amountCentavos)} anrejistre dirèk pou ${directModalDriver.full_name}!`
+        `Kontribisyon ${formatBRL(amountCentavos)} anrejistre pou ${directModalDriver.full_name}! Li plase nan eta "An Atant" epi li disponib kounye a nan lis Verifikasyon Trezorye (/admin/atant) pou apwobasyon ofisyèl.`
       );
       setDirectModalDriver(null);
       setDirectNote('');
