@@ -172,7 +172,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
               Sistèm Jesyon Kontribisyon Chofè Legliz — Brezil
             </p>
             <p className="text-slate-400 text-[11px]">
-              Règ: R$ 10,00 pou chak jou chofè a travay. Transparans total pou tout manm.
+              Règ: Chak chofè lib pou kontribye nenpòt montan selon kapasite li. Pa gen montan minimòm obligatwa.
             </p>
             <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-center gap-1.5 sm:gap-3 text-xs text-slate-400">
               <span className="font-medium text-slate-600">

@@ -881,7 +881,7 @@ export const repository = {
   }): Promise<{ submission?: ContributionSubmission | null; error?: string }> {
     const amount = data.amount_centavos ?? data.amount_cents ?? 0;
     if (amount < MINIMUM_CONTRIBUTION_CENTAVOS) {
-      return { error: 'Kontribisyon an dwe omwen R$ 10,00.' };
+      return { error: 'Montan kontribisyon an dwe siperyè a zewo.' };
     }
 
     const supabase = isSupabaseConfigured() ? createClient() : null;
@@ -1003,7 +1003,7 @@ export const repository = {
       }
 
       if (amount < MINIMUM_CONTRIBUTION_CENTAVOS) {
-        return { error: 'Kontribisyon an dwe omwen R$ 10,00.' };
+        return { error: 'Montan kontribisyon an dwe siperyè a zewo.' };
       }
 
       // Atomic, admin-only, idempotent-by-unique-index RPC: creates the pending

@@ -152,45 +152,68 @@ describe('Sistèm Jesyon Kontribisyon Chofè Legliz - Global Live Contribution B
     expect(parseBRLInputToCentavos('R$ 1.250,00')).toBe(125000);
   });
 
-  // TÈS 7: Yon chofè ka soumèt R$ 10,00 oswa plis pou chak jou travay
-  it('7. Yon chofè ka soumèt kontribisyon minimòm R$ 10,00 oswa plis (R$ 15, R$ 20, R$ 50)', () => {
-    const amounts = [1000, 1500, 2000, 5000];
-    amounts.forEach((amt, idx) => {
+  // TÈS 7: Yon chofè ka soumèt nenpòt montan pozitif (R$ 0,01, R$ 0,50, R$ 1,00, R$ 5,00, R$ 10,00, R$ 100,00)
+  it('7. Yon chofè ka soumèt nenpòt montan pozitif (R$ 0,01, R$ 0,50, R$ 1, R$ 5, R$ 10, R$ 100)', () => {
+    // 1 centavo (R$ 0,01), 50 centavos (R$ 0,50), 100 (R$ 1,00), 500 (R$ 5,00), 1000 (R$ 10,00), 10000 (R$ 100,00)
+    const testAmounts = [1, 50, 100, 500, 1000, 10000];
+    testAmounts.forEach((amt, idx) => {
       const res = demoStorage.submitContribution({
         driver_id: 'usr-driver-03',
-        work_date: `2026-10-${15 + idx}`,
-        payment_date: `2026-10-${15 + idx}`,
+        work_date: `2026-11-${String(idx + 1).padStart(2, '0')}`,
+        payment_date: `2026-11-${String(idx + 1).padStart(2, '0')}`,
         amount_centavos: amt,
         payment_method: 'PIX',
       });
       expect(res.submission).toBeDefined();
       expect(res.submission?.amount_centavos).toBe(amt);
+      expect(res.submission?.status).toBe('PENDING');
     });
   });
 
-  // TÈS 8: Yon kontribisyon ki mwens pase R$ 10,00 rejte avèk mesaj kreyòl apwopriye
-  it('8. Yon kontribisyon ki mwens pase R$ 10,00 rejte avèk mesaj kreyòl klè', () => {
-    const invalidRes = demoStorage.submitContribution({
+  // TÈS 8: Yon kontribisyon ki zewo oswa negatif rejte avèk mesaj kreyòl apwopriye
+  it('8. Yon kontribisyon ki zewo oswa negatif rejte avèk mesaj kreyòl klè', () => {
+    // Zero amount
+    const zeroRes = demoStorage.submitContribution({
       driver_id: 'usr-driver-01',
       work_date: '2026-10-30',
       payment_date: '2026-10-30',
-      amount_centavos: 800, // R$ 8,00
+      amount_centavos: 0,
       payment_method: 'PIX',
     });
-    expect(invalidRes.submission).toBeNull();
-    expect(invalidRes.error).toBe('Kontribisyon an dwe omwen R$ 10,00.');
+    expect(zeroRes.submission).toBeNull();
+    expect(zeroRes.error).toBe('Montan kontribisyon an dwe siperyè a zewo.');
 
-    // Zod validation check
-    const zod = contributionSchema.safeParse({
+    // Negative amount
+    const negRes = demoStorage.submitContribution({
+      driver_id: 'usr-driver-01',
+      work_date: '2026-10-31',
+      payment_date: '2026-10-31',
+      amount_centavos: -500,
+      payment_method: 'PIX',
+    });
+    expect(negRes.submission).toBeNull();
+    expect(negRes.error).toBe('Montan kontribisyon an dwe siperyè a zewo.');
+
+    // Zod validation check on zero
+    const zodZero = contributionSchema.safeParse({
       work_date: '2026-10-30',
       payment_date: '2026-10-30',
-      amount_centavos: 500,
+      amount_centavos: 0,
       payment_method: 'PIX',
     });
-    expect(zod.success).toBe(false);
-    if (!zod.success) {
-      expect(zod.error.issues[0]?.message).toBe('Kontribisyon an dwe omwen R$ 10,00.');
+    expect(zodZero.success).toBe(false);
+    if (!zodZero.success) {
+      expect(zodZero.error.issues[0]?.message).toBe('Montan kontribisyon an dwe siperyè a zewo.');
     }
+
+    // Zod validation check on valid 1 centavo (R$ 0,01)
+    const zodValid = contributionSchema.safeParse({
+      work_date: '2026-10-30',
+      payment_date: '2026-10-30',
+      amount_centavos: 1,
+      payment_method: 'PIX',
+    });
+    expect(zodValid.success).toBe(true);
   });
 
   // TÈS 9: Idempotans ak anpecheman apwobasyon an doub
@@ -306,7 +329,7 @@ describe('Sistèm Jesyon Kontribisyon Chofè Legliz - Global Live Contribution B
 
     // Tout dosye ki parèt yo se kontribisyon ki te apwouve
     page1.data.forEach((c) => {
-      expect(c.amount_centavos).toBeGreaterThanOrEqual(1000);
+      expect(c.amount_centavos).toBeGreaterThan(0);
       expect(c.driver_name).toBeDefined();
     });
 

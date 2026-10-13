@@ -41,10 +41,9 @@ export default function HomePage() {
       <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200/60 flex items-start gap-3 text-xs text-slate-600 leading-relaxed">
         <Info className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
         <div>
-          <strong className="text-slate-800">Règ Kontribisyon an:</strong> Chak chofè bay yon
-          minimòm <strong>R$ 10,00</strong> pou chak jou li travay reyèlman. Ou gen dwa bay plis
-          (R$ 15, R$ 20, R$ 50, elatriye). Si ou pa t travay nan yon jou, ou pa gen okenn
-          obligasyon oswa dèt.
+          <strong className="text-slate-800">Règ Kontribisyon an:</strong> Chak chofè lib pou kontribye
+          nenpòt montan li vle, selon kapasite li. Pa gen montan minimòm obligatwa. Si yon chofè pa travay
+          nan yon jou, li pa gen okenn obligasyon oswa dèt.
         </div>
       </div>
 

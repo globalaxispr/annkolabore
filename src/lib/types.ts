@@ -21,7 +21,7 @@ export interface ContributionSubmission {
   driver_name: string;
   work_date: string; // YYYY-MM-DD
   payment_date: string; // YYYY-MM-DD
-  amount_centavos: number; // integer centavos, minimum 1000 (R$ 10,00)
+  amount_centavos: number; // integer centavos, positive amount (minimum 1 centavo / R$ 0,01)
   amount_cents?: number;
   payment_method: PaymentMethod;
   transaction_ref?: string;

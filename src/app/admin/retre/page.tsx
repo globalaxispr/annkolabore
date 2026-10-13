@@ -41,7 +41,7 @@ export default function AdminRetrePage() {
             Transparans ak Destinasyon Fon yo
           </div>
           <p>
-            Tout lajan chofè yo kontribye (R$ 10,00 pou chak jou yo travay) se yon donasyon dirèk
+            Tout lajan chofè yo kontribye (selon volonte yo pou chak jou yo travay) se yon donasyon dirèk
             pou legliz la. Tout tranzaksyon yo vizib piblikman pou tout manm ak vizitè yo.
           </p>
         </div>

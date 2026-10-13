@@ -60,7 +60,7 @@ export default function SubmitContributionPage() {
     // Clean amount input
     const cleanNum = parseFloat(amountBRL.replace(',', '.'));
     if (isNaN(cleanNum) || Math.round(cleanNum * 100) < MINIMUM_CONTRIBUTION_CENTAVOS) {
-      setErrorMsg('Kontribisyon an dwe omwen R$ 10,00.');
+      setErrorMsg('Montan kontribisyon an dwe siperyè a zewo (omwen R$ 0,01).');
       return;
     }
 
@@ -115,7 +115,7 @@ export default function SubmitContributionPage() {
             Soumèt Kontribisyon
           </h1>
           <p className="text-xs text-slate-400 mt-1">
-            Anrejistre kontribisyon ou pou yon jou ou te travay (minimòm R$ 10,00)
+            Anrejistre kontribisyon ou pou yon jou ou te travay
           </p>
         </div>
 
@@ -123,8 +123,7 @@ export default function SubmitContributionPage() {
         <div className="bg-slate-50 border border-slate-200/70 rounded-2xl p-4 mb-6 flex items-start gap-3">
           <Info className="w-4 h-4 text-slate-500 shrink-0 mt-0.5" />
           <div className="text-xs text-slate-600 leading-relaxed">
-            <strong>Règ Gwoup la:</strong> Minimòm nan se <strong>R$ 10,00</strong> pa jou travay. Ou gen
-            dwa bay plis si ou vle. Si ou pa t travay, ou pa gen anyen pou w peye.
+            <strong>Règ Gwoup la:</strong> Chak chofè lib pou kontribye nenpòt montan li vle, selon kapasite li. Pa gen montan minimòm obligatwa. Si ou pa t travay nan yon jou, ou pa gen okenn obligasyon oswa dèt.
           </div>
         </div>
 
@@ -233,7 +232,7 @@ export default function SubmitContributionPage() {
                   className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900 bg-white font-mono"
                 />
               </div>
-              <p className="text-[10px] text-slate-400 mt-1">Minimòm: R$ 10,00</p>
+              <p className="text-[10px] text-slate-400 mt-1">Nenpòt montan siperyè a R$ 0,00 (omwen R$ 0,01)</p>
             </div>
 
             <div>

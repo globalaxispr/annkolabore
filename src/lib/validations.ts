@@ -36,7 +36,7 @@ export const contributionSchema = z.object({
   amount_centavos: z
     .number()
     .int('Montan an dwe yon chif antye')
-    .min(1000, 'Kontribisyon an dwe omwen R$ 10,00.'),
+    .min(1, 'Montan kontribisyon an dwe siperyè a zewo.'),
   payment_method: z.enum(['PIX', 'Espès', 'Transfè', 'Lòt'], {
     message: 'Tanpri chwazi yon metòd peman valab',
   }),

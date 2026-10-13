@@ -55,7 +55,11 @@ export default function MembersAdminPage() {
     setDirectError(null);
 
     const cleanNum = parseFloat(directAmount.replace(',', '.'));
-    const amountCentavos = isNaN(cleanNum) ? 1000 : Math.round(cleanNum * 100);
+    if (isNaN(cleanNum) || Math.round(cleanNum * 100) < 1) {
+      setDirectError('Montan kontribisyon an dwe siperyè a zewo.');
+      return;
+    }
+    const amountCentavos = Math.round(cleanNum * 100);
 
     const res = await repository.recordDirectContribution({
       admin_id: currentUser.id,

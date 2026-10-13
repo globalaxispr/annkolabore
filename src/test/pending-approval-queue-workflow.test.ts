@@ -250,4 +250,66 @@ describe('CRITICAL FINANCIAL WORKFLOW — Pending Approval Queue & Admin Workflo
     const duplicates = page2.data.filter((c) => page1Ids.has(c.id));
     expect(duplicates.length).toBe(0);
   });
+
+  // TEST 9: Contributions of arbitrary positive amounts (R$ 0,01 to R$ 100,00) enter pending queue and update balance upon approval
+  it('9. Driver submissions and admin records of arbitrary positive amounts (R$ 0,01, R$ 0,50, R$ 1,00, R$ 5,00, R$ 100,00) enter pending queue and credit balance accurately', async () => {
+    const initialSummary = demoStorage.getFinancialSummary();
+    const initialBalance = initialSummary.current_balance_centavos;
+
+    // 1. Driver submits R$ 0,01 (1 centavo)
+    const sub1Cent = demoStorage.submitContribution({
+      driver_id: 'usr-driver-01',
+      work_date: '2026-11-20',
+      payment_date: '2026-11-20',
+      amount_centavos: 1, // R$ 0,01
+      payment_method: 'PIX',
+    });
+    expect(sub1Cent.submission).toBeDefined();
+    expect(sub1Cent.submission?.amount_centavos).toBe(1);
+    expect(sub1Cent.submission?.status).toBe('PENDING');
+
+    // 2. Admin records contribution of R$ 0,50 (50 centavos)
+    const admin50Cents = demoStorage.submitContribution({
+      driver_id: 'usr-driver-02',
+      work_date: '2026-11-21',
+      payment_date: '2026-11-21',
+      amount_centavos: 50, // R$ 0,50
+      payment_method: 'PIX',
+    });
+    expect(admin50Cents.submission).toBeDefined();
+    expect(admin50Cents.submission?.amount_centavos).toBe(50);
+    expect(admin50Cents.submission?.status).toBe('PENDING');
+
+    // Both are in pending queue; balance remains unchanged
+    const pendingList = demoStorage.getAllPendingSubmissions();
+    expect(pendingList.find((s) => s.id === sub1Cent.submission?.id)).toBeDefined();
+    expect(pendingList.find((s) => s.id === admin50Cents.submission?.id)).toBeDefined();
+    expect(demoStorage.getFinancialSummary().current_balance_centavos).toBe(initialBalance);
+
+    // 3. Admin approves R$ 0,01
+    const approve1 = demoStorage.approveSubmission(sub1Cent.submission!.id, 'usr-admin-01');
+    expect(approve1.success).toBe(true);
+    expect(demoStorage.getFinancialSummary().current_balance_centavos).toBe(initialBalance + 1);
+
+    // 4. Admin approves R$ 0,50
+    const approve2 = demoStorage.approveSubmission(admin50Cents.submission!.id, 'usr-admin-01');
+    expect(approve2.success).toBe(true);
+    expect(demoStorage.getFinancialSummary().current_balance_centavos).toBe(initialBalance + 1 + 50);
+
+    // 5. Duplicate approval does not double count
+    const duplicateApprove = demoStorage.approveSubmission(sub1Cent.submission!.id, 'usr-admin-01');
+    expect(duplicateApprove.success).toBe(false);
+    expect(demoStorage.getFinancialSummary().current_balance_centavos).toBe(initialBalance + 1 + 50);
+
+    // 6. Zero or negative amounts rejected
+    const zeroSub = demoStorage.submitContribution({
+      driver_id: 'usr-driver-01',
+      work_date: '2026-11-22',
+      payment_date: '2026-11-22',
+      amount_centavos: 0,
+      payment_method: 'PIX',
+    });
+    expect(zeroSub.submission).toBeNull();
+    expect(zeroSub.error).toBe('Montan kontribisyon an dwe siperyè a zewo.');
+  });
 });

@@ -1,10 +1,11 @@
 import { ContributionSubmission, FinancialSummary, GlobalContributionSummary, PublicDonationSubmission } from './types';
 
 /**
- * Minimum contribution per working day: R$ 10,00 (1000 centavos).
- * Drivers may contribute more (R$ 15,00, R$ 20,00, R$ 50,00, R$ 100,00...).
+ * No mandatory minimum contribution (R$ 10 minimum requirement removed).
+ * Minimum valid amount is 1 centavo (R$ 0,01).
+ * Zero and negative amounts remain strictly prohibited.
  */
-export const MINIMUM_CONTRIBUTION_CENTAVOS = 1000;
+export const MINIMUM_CONTRIBUTION_CENTAVOS = 1;
 export const DEFAULT_CONTRIBUTION_CENTAVOS = 1000;
 
 /**
@@ -22,7 +23,7 @@ export function validateContributionAmount(amountCentavos: number): {
     !Number.isInteger(amountCentavos) ||
     amountCentavos < MINIMUM_CONTRIBUTION_CENTAVOS
   ) {
-    return { valid: false, error: 'Kontribisyon an dwe omwen R$ 10,00.' };
+    return { valid: false, error: 'Montan kontribisyon an dwe siperyè a zewo.' };
   }
   return { valid: true };
 }

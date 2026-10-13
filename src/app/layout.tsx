@@ -12,7 +12,7 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   title: 'Sistèm Jesyon Kontribisyon Chofè Legliz',
-  description: 'Platfòm transparans finansye pou gwoup chofè legliz nan Brezil. Kontribisyon R$ 10,00 pa chak jou travay.',
+  description: 'Platfòm transparans finansye pou gwoup chofè legliz nan Brezil. Kontribisyon lib san montan minimòm obligatwa pou chak jou travay.',
   keywords: ['kontribisyon chofè', 'legliz', 'Brezil', 'transparans finansye', 'Kreyòl Ayisyen'],
 };
 

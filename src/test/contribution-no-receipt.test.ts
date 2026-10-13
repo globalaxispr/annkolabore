@@ -75,13 +75,21 @@ describe('Contribution submission without receipt', () => {
     expect(payload).not.toHaveProperty('notes');
   });
 
-  it('rejects amounts below R$10 before touching the database', async () => {
+  it('rejects zero and negative amounts before touching the database', async () => {
     const res = await repository.submitContribution({
       work_date: '2026-10-13',
-      amount_centavos: 999,
+      amount_centavos: 0,
       payment_method: 'PIX',
     });
     expect(res.error).toBeTruthy();
+    expect(insertSpy).not.toHaveBeenCalled();
+
+    const resNeg = await repository.submitContribution({
+      work_date: '2026-10-13',
+      amount_centavos: -100,
+      payment_method: 'PIX',
+    });
+    expect(resNeg.error).toBeTruthy();
     expect(insertSpy).not.toHaveBeenCalled();
   });
 
@@ -129,13 +137,13 @@ describe('Contribution submission without receipt', () => {
     expect(res.error).toContain('admin_record_contribution');
   });
 
-  it('admin direct contribution enforces R$10 minimum', async () => {
+  it('admin direct contribution rejects zero and negative amounts', async () => {
     const res = await repository.recordDirectContribution({
       admin_id: 'admin-1',
       driver_id: 'driver-1',
       work_date: '2026-10-13',
       payment_date: '2026-10-13',
-      amount_centavos: 500,
+      amount_centavos: 0,
       payment_method: 'PIX',
     });
     expect(res.error).toBeTruthy();
