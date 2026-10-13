@@ -79,6 +79,7 @@ export const SidebarContent: React.FC<SidebarContentProps> = ({
                   <li key={`${section.id}-${item.href}`}>
                     <Link
                       href={item.href}
+                      prefetch={false}
                       onClick={onNavigate}
                       aria-current={active ? 'page' : undefined}
                       className={`group flex items-center gap-3 rounded-xl px-3 py-2 text-[13px] font-medium transition-colors ${

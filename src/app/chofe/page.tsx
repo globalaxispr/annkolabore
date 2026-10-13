@@ -63,6 +63,7 @@ export default function DriverDashboardPage() {
 
         <Link
           href="/chofe/soumet"
+          prefetch={false}
           className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl bg-slate-900 hover:bg-black text-white text-xs sm:text-sm font-bold shadow-xs transition"
         >
           <PlusCircle className="w-4 h-4 text-emerald-400" />
@@ -137,6 +138,7 @@ export default function DriverDashboardPage() {
             <p className="text-sm font-semibold text-slate-700">Ou poko soumèt okenn kontribisyon</p>
             <Link
               href="/chofe/soumet"
+              prefetch={false}
               className="mt-3 inline-flex items-center gap-1.5 text-xs text-emerald-700 font-bold hover:underline"
             >
               <PlusCircle className="w-3.5 h-3.5" />

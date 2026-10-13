@@ -105,6 +105,7 @@ export default function SubmitContributionPage() {
       <div>
         <Link
           href="/chofe"
+          prefetch={false}
           className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-800 transition"
         >
           <ArrowLeft className="w-3.5 h-3.5" />

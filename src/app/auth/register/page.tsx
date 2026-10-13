@@ -50,7 +50,7 @@ export default function RegisterPage() {
       );
 
       setTimeout(() => {
-        router.push('/chofe');
+        window.location.href = '/chofe';
       }, 1500);
     } finally {
       setSubmitting(false);

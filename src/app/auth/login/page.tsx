@@ -2,12 +2,10 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { repository } from '@/lib/repository';
 import { Lock, Mail, AlertTriangle, Loader2 } from 'lucide-react';
 
 export default function LoginPage() {
-  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -26,11 +24,24 @@ export default function LoginPage() {
       }
 
       if (res.user) {
-        if (res.user.role === 'admin') {
-          router.push('/admin');
-        } else {
-          router.push('/chofe');
+        // Read redirect query parameter if present
+        let destination = res.user.role === 'admin' ? '/admin' : '/chofe';
+        if (typeof window !== 'undefined') {
+          const params = new URLSearchParams(window.location.search);
+          const redirectParam = params.get('redirect');
+          if (
+            redirectParam &&
+            redirectParam.startsWith('/') &&
+            !redirectParam.startsWith('//') &&
+            !redirectParam.startsWith('/\\')
+          ) {
+            destination = redirectParam;
+          }
         }
+
+        // Full navigation purges any unauthenticated prefetch cache and ensures clean cookie headers
+        window.location.href = destination;
+        return;
       }
     } finally {
       setSubmitting(false);

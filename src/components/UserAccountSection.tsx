@@ -2,7 +2,6 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { repository } from '@/lib/repository';
 import { UserProfile } from '@/lib/types';
 import { LogOut, Loader2, LogIn, UserPlus, AlertCircle } from 'lucide-react';
@@ -19,7 +18,6 @@ export const UserAccountSection: React.FC<UserAccountSectionProps> = ({
   onNavigate,
   layout = 'sidebar',
 }) => {
-  const router = useRouter();
   const [signingOut, setSigningOut] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -35,8 +33,7 @@ export const UserAccountSection: React.FC<UserAccountSectionProps> = ({
       }
       if (onNavigate) onNavigate();
       // Invalidate Next.js cache and navigate to /auth/login
-      router.refresh();
-      router.replace('/auth/login');
+      window.location.href = '/auth/login';
     } catch (err: any) {
       console.error('Erè pandan dekoneksyon an:', err);
       setErrorMsg('Erè pandan dekoneksyon an. Tanpri eseye ankò.');
@@ -82,6 +79,7 @@ export const UserAccountSection: React.FC<UserAccountSectionProps> = ({
       {/* User Card */}
       <Link
         href="/perfil"
+        prefetch={false}
         onClick={onNavigate}
         className="flex items-center gap-3 p-2.5 rounded-2xl bg-slate-50 hover:bg-slate-100/80 border border-slate-200/60 transition group"
         title="Gade oswa modifye pwofil ou"

@@ -193,6 +193,7 @@ export default function ProfilePage() {
       <div>
         <Link
           href={user.role === 'admin' ? '/admin' : '/chofe'}
+          prefetch={false}
           className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-900 transition"
         >
           <ArrowLeft className="w-4 h-4" />
@@ -418,8 +419,7 @@ export default function ProfilePage() {
               type="button"
               onClick={async () => {
                 await repository.signOut();
-                router.replace('/auth/login');
-                router.refresh();
+                window.location.href = '/auth/login';
               }}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 hover:border-rose-300 hover:bg-rose-50 text-slate-600 hover:text-rose-700 text-xs font-bold transition"
             >

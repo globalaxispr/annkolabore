@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { repository } from '@/lib/repository';
 import { UserProfile } from '@/lib/types';
 import { SidebarContent } from './SidebarContent';
@@ -16,11 +16,11 @@ import {
   Shield,
   User,
   LogIn,
+  HeartHandshake,
 } from 'lucide-react';
 
 export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const pathname = usePathname();
-  const router = useRouter();
   const [user, setUser] = useState<UserProfile | null>(null);
   const [pendingCount, setPendingCount] = useState<number>(0);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
@@ -69,8 +69,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
       await repository.signOut();
       setUser(null);
       setMobileDrawerOpen(false);
-      router.refresh();
-      router.replace('/auth/login');
+      window.location.href = '/auth/login';
     } catch (err) {
       console.error('Erè pandan dekoneksyon:', err);
     }
@@ -202,29 +201,46 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
             <span>Akèy</span>
           </Link>
 
-          <Link
-            href="/chofe/soumet"
-            className={`flex flex-col items-center gap-0.5 py-1 px-2.5 rounded-lg ${
-              pathname === '/chofe/soumet' ? 'text-emerald-700 font-bold' : 'hover:text-emerald-700'
-            }`}
-          >
-            <PlusCircle className="w-4 h-4 text-emerald-600" />
-            <span>Soumèt</span>
-          </Link>
+          {user ? (
+            <>
+              <Link
+                href="/chofe/soumet"
+                prefetch={false}
+                className={`flex flex-col items-center gap-0.5 py-1 px-2.5 rounded-lg ${
+                  pathname === '/chofe/soumet' ? 'text-emerald-700 font-bold' : 'hover:text-emerald-700'
+                }`}
+              >
+                <PlusCircle className="w-4 h-4 text-emerald-600" />
+                <span>Soumèt</span>
+              </Link>
 
-          <Link
-            href="/chofe"
-            className={`flex flex-col items-center gap-0.5 py-1 px-2.5 rounded-lg ${
-              pathname === '/chofe' ? 'text-slate-900 font-bold' : 'hover:text-slate-900'
-            }`}
-          >
-            <Car className="w-4 h-4" />
-            <span>Kont Mwen</span>
-          </Link>
+              <Link
+                href="/chofe"
+                prefetch={false}
+                className={`flex flex-col items-center gap-0.5 py-1 px-2.5 rounded-lg ${
+                  pathname === '/chofe' ? 'text-slate-900 font-bold' : 'hover:text-slate-900'
+                }`}
+              >
+                <Car className="w-4 h-4" />
+                <span>Kont Mwen</span>
+              </Link>
+            </>
+          ) : (
+            <Link
+              href="/kontribye"
+              className={`flex flex-col items-center gap-0.5 py-1 px-2.5 rounded-lg ${
+                pathname === '/kontribye' ? 'text-emerald-700 font-bold' : 'hover:text-emerald-700'
+              }`}
+            >
+              <HeartHandshake className="w-4 h-4 text-emerald-600" />
+              <span>Kontribiye</span>
+            </Link>
+          )}
 
           {isAdmin ? (
             <Link
               href="/admin"
+              prefetch={false}
               className={`flex flex-col items-center gap-0.5 py-1 px-2.5 rounded-lg ${
                 pathname.startsWith('/admin') ? 'text-amber-800 font-bold' : 'hover:text-amber-800'
               }`}
@@ -235,6 +251,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
           ) : user ? (
             <Link
               href="/perfil"
+              prefetch={false}
               className={`flex flex-col items-center gap-0.5 py-1 px-2.5 rounded-lg ${
                 pathname === '/perfil' ? 'text-slate-900 font-bold' : 'hover:text-slate-900'
               }`}
