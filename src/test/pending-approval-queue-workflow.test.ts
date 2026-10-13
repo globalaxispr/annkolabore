@@ -180,4 +180,74 @@ describe('CRITICAL FINANCIAL WORKFLOW — Pending Approval Queue & Admin Workflo
     expect(driverReject.success).toBe(false);
     expect(driverReject.error).toContain('mande otorizasyon administratè');
   });
+
+  // TEST 7: Public contributors list includes ONLY approved contributions, never pending or rejected
+  it('7. Only approved contributions appear in public recent list; pending and rejected stay strictly hidden', async () => {
+    // 1. Submit pending (not approved yet)
+    const pendingSub = demoStorage.submitContribution({
+      driver_id: 'usr-driver-01',
+      work_date: '2026-11-03',
+      payment_date: '2026-11-03',
+      amount_centavos: 2000,
+      payment_method: 'PIX',
+    });
+
+    const publicList1 = await repository.getPaginatedPublicContributors(1, 5);
+    expect(publicList1.data.find((c) => c.id === pendingSub.submission?.id)).toBeUndefined();
+
+    // 2. Approve it
+    demoStorage.approveSubmission(pendingSub.submission!.id, 'usr-admin-01');
+
+    const publicList2 = await repository.getPaginatedPublicContributors(1, 5);
+    const approvedItem = publicList2.data.find((c) => c.id === pendingSub.submission?.id);
+    expect(approvedItem).toBeDefined();
+    expect(approvedItem?.amount_centavos).toBe(2000);
+    expect(approvedItem?.status).toBe('Apwouve');
+
+    // Sensitive fields are not exposed in public contributor type
+    expect((approvedItem as any).receipt_url).toBeUndefined();
+    expect((approvedItem as any).receipt_path).toBeUndefined();
+    expect((approvedItem as any).payment_reference).toBeUndefined();
+    expect((approvedItem as any).note).toBeUndefined();
+
+    // 3. Submit and reject another
+    const rejectedSub = demoStorage.submitContribution({
+      driver_id: 'usr-driver-02',
+      work_date: '2026-11-04',
+      payment_date: '2026-11-04',
+      amount_centavos: 3000,
+      payment_method: 'PIX',
+    });
+    demoStorage.rejectSubmission(rejectedSub.submission!.id, 'usr-admin-01', 'Rezon refi');
+
+    const publicList3 = await repository.getPaginatedPublicContributors(1, 5);
+    expect(publicList3.data.find((c) => c.id === rejectedSub.submission?.id)).toBeUndefined();
+  });
+
+  // TEST 8: Pagination initially limits to 5 items, subsequent page loads additional items without duplicates
+  it('8. Pagination loads 5 records initially and allows loading more without duplicate IDs', async () => {
+    // Populate 7 approved contributions
+    for (let i = 1; i <= 7; i++) {
+      const s = demoStorage.submitContribution({
+        driver_id: 'usr-driver-01',
+        work_date: `2026-11-${10 + i}`,
+        payment_date: `2026-11-${10 + i}`,
+        amount_centavos: 1000 * i,
+        payment_method: 'PIX',
+      });
+      demoStorage.approveSubmission(s.submission!.id, 'usr-admin-01');
+    }
+
+    const page1 = await repository.getPaginatedPublicContributors(1, 5);
+    expect(page1.data.length).toBe(5);
+    expect(page1.totalCount).toBeGreaterThanOrEqual(7);
+
+    const page2 = await repository.getPaginatedPublicContributors(2, 5);
+    expect(page2.data.length).toBeGreaterThanOrEqual(2);
+
+    // No IDs in page 2 should exist in page 1
+    const page1Ids = new Set(page1.data.map((c) => c.id));
+    const duplicates = page2.data.filter((c) => page1Ids.has(c.id));
+    expect(duplicates.length).toBe(0);
+  });
 });

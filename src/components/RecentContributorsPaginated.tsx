@@ -1,22 +1,19 @@
 'use client';
 
-import React, { useEffect, useState, useTransition } from 'react';
-import Image from 'next/image';
-import { useRouter, useSearchParams } from 'next/navigation';
+import React, { useEffect, useState, useCallback } from 'react';
 import { repository } from '@/lib/repository';
 import { PublicApprovedContributor } from '@/lib/types';
 import { formatBRL, formatDateCreole } from '@/lib/formatters';
 import { StatusBadge } from './StatusBadge';
 import { initialsOf } from './shell/SidebarContent';
 import {
-  ChevronLeft,
-  ChevronRight,
   ShieldCheck,
   Clock,
   Calendar,
-  CreditCard,
   Loader2,
-  Users,
+  RefreshCw,
+  AlertCircle,
+  Plus,
 } from 'lucide-react';
 
 interface RecentContributorsPaginatedProps {
@@ -24,73 +21,76 @@ interface RecentContributorsPaginatedProps {
 }
 
 export const RecentContributorsPaginated: React.FC<RecentContributorsPaginatedProps> = ({
-  pageSize = 10,
+  pageSize = 5,
 }) => {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-
-  // Read initial page from URL query ?paj=X
-  const initialPage = Math.max(1, parseInt(searchParams.get('paj') || '1', 10) || 1);
-
-  const [page, setPage] = useState<number>(initialPage);
   const [contributors, setContributors] = useState<PublicApprovedContributor[]>([]);
+  const [page, setPage] = useState<number>(1);
   const [totalCount, setTotalCount] = useState<number>(0);
-  const [totalPages, setTotalPages] = useState<number>(1);
   const [loading, setLoading] = useState<boolean>(true);
-  const [isPending, startTransition] = useTransition();
-
+  const [loadingMore, setLoadingMore] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const loadPageData = async (targetPage: number) => {
+  const loadInitialData = useCallback(async () => {
     setLoading(true);
     setErrorMsg(null);
     try {
-      const res = await repository.getPaginatedPublicContributors(targetPage, pageSize);
+      const res = await repository.getPaginatedPublicContributors(1, pageSize);
       setContributors(res.data);
       setTotalCount(res.totalCount);
-      setTotalPages(res.totalPages);
-      setPage(res.page);
+      setPage(1);
     } catch (err: any) {
       console.error('Erè pandan rekiperasyon kontribisyon yo:', err);
-      setErrorMsg(err.message || 'Erè pandan lekti kontribisyon yo nan baz done a.');
+      setErrorMsg(
+        err?.message ||
+          'Pa ka jwenn lis kontribisyon yo kounye a. Tanpri verifye koneksyon an.'
+      );
     } finally {
       setLoading(false);
+    }
+  }, [pageSize]);
+
+  const handleLoadMore = async () => {
+    if (loadingMore || contributors.length >= totalCount) return;
+
+    setLoadingMore(true);
+    try {
+      const nextPage = page + 1;
+      const res = await repository.getPaginatedPublicContributors(nextPage, pageSize);
+
+      setContributors((prev) => {
+        const existingIds = new Set(prev.map((c) => c.id));
+        const newUnique = res.data.filter((c) => !existingIds.has(c.id));
+        return [...prev, ...newUnique];
+      });
+      setPage(nextPage);
+      setTotalCount(res.totalCount);
+    } catch (err: any) {
+      console.error('Erè pandan chajman lòt kontribisyon yo:', err);
+    } finally {
+      setLoadingMore(false);
     }
   };
 
   useEffect(() => {
-    loadPageData(page);
+    loadInitialData();
 
-    // Listen for realtime balance updates to auto-refresh first page
+    // Auto-refresh when an administrator approves a contribution in real time
     const unsubscribe = repository.subscribeToGlobalBalance(() => {
-      loadPageData(page);
+      loadInitialData();
     });
 
     return () => {
       unsubscribe();
     };
-  }, []);
+  }, [loadInitialData]);
 
-  const handlePageChange = (newPage: number) => {
-    if (newPage < 1 || newPage > totalPages || newPage === page) return;
-
-    startTransition(() => {
-      setPage(newPage);
-      // Update URL query ?paj=X without full page reload
-      const params = new URLSearchParams(window.location.search);
-      params.set('paj', newPage.toString());
-      const newUrl = `${window.location.pathname}?${params.toString()}`;
-      window.history.pushState(null, '', newUrl);
-    });
-
-    loadPageData(newPage);
-  };
+  const hasMore = contributors.length < totalCount;
 
   return (
     <section
       role="region"
       aria-label="Dènye Kontribisyon yo"
-      className="bg-white rounded-3xl border border-slate-100 shadow-xs overflow-hidden space-y-0"
+      className="bg-white rounded-3xl border border-slate-100 shadow-xs overflow-hidden"
     >
       {/* Header */}
       <div className="p-5 sm:p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -100,8 +100,8 @@ export const RecentContributorsPaginated: React.FC<RecentContributorsPaginatedPr
               Dènye Kontribisyon yo
             </h2>
             {totalCount > 0 && (
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600">
-                {totalCount} total
+              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700">
+                {totalCount} ofisyèl
               </span>
             )}
           </div>
@@ -110,9 +110,19 @@ export const RecentContributorsPaginated: React.FC<RecentContributorsPaginatedPr
           </p>
         </div>
 
-        <div className="flex items-center gap-1.5 self-start sm:self-auto px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-100/60">
-          <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-          Transparans Piblik
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <button
+            onClick={loadInitialData}
+            disabled={loading}
+            title="Rafrechi lis la"
+            className="p-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 disabled:opacity-40 transition shadow-xs"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-emerald-600' : ''}`} />
+          </button>
+          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-100/60">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+            Transparans Piblik
+          </div>
         </div>
       </div>
 
@@ -120,28 +130,31 @@ export const RecentContributorsPaginated: React.FC<RecentContributorsPaginatedPr
       {loading ? (
         // Loading Skeleton
         <div className="divide-y divide-slate-100 animate-pulse">
-          {Array.from({ length: 5 }).map((_, i) => (
+          {Array.from({ length: 3 }).map((_, i) => (
             <div key={i} className="p-4 sm:p-5 flex items-center justify-between gap-4">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-slate-200" />
+                <div className="w-10 h-10 rounded-full bg-slate-100" />
                 <div className="space-y-1.5">
-                  <div className="h-4 w-32 bg-slate-200 rounded" />
-                  <div className="h-3 w-24 bg-slate-100 rounded" />
+                  <div className="h-4 w-32 bg-slate-100 rounded" />
+                  <div className="h-3 w-24 bg-slate-50 rounded" />
                 </div>
               </div>
               <div className="space-y-1.5 text-right">
-                <div className="h-4 w-20 bg-slate-200 rounded ml-auto" />
-                <div className="h-3 w-14 bg-slate-100 rounded ml-auto" />
+                <div className="h-4 w-20 bg-slate-100 rounded ml-auto" />
+                <div className="h-3 w-14 bg-slate-50 rounded ml-auto" />
               </div>
             </div>
           ))}
         </div>
       ) : errorMsg ? (
-        <div className="py-12 px-6 text-center text-rose-800 bg-rose-50/50 space-y-2">
-          <p className="text-xs font-semibold">{errorMsg}</p>
+        <div className="py-12 px-6 text-center text-rose-800 bg-rose-50/40 space-y-3">
+          <div className="flex items-center justify-center gap-2 text-rose-700 font-semibold text-xs">
+            <AlertCircle className="w-4 h-4" />
+            <span>{errorMsg}</span>
+          </div>
           <button
-            onClick={() => loadPageData(page)}
-            className="px-3 py-1.5 rounded-xl bg-rose-600 text-white text-xs font-bold hover:bg-rose-700 transition"
+            onClick={loadInitialData}
+            className="px-4 py-2 rounded-xl bg-rose-600 text-white text-xs font-bold hover:bg-rose-700 transition shadow-xs"
           >
             Eseye Ankò
           </button>
@@ -162,11 +175,11 @@ export const RecentContributorsPaginated: React.FC<RecentContributorsPaginatedPr
             return (
               <div
                 key={c.id}
-                className="p-4 sm:p-5 hover:bg-slate-50/60 transition flex items-center justify-between gap-3 text-xs"
+                className="p-4 sm:p-5 hover:bg-slate-50/50 transition flex items-center justify-between gap-3 text-xs bg-white"
               >
                 {/* Driver Photo & Name */}
                 <div className="flex items-center gap-3.5 min-w-0">
-                  <div className="w-10 h-10 rounded-full overflow-hidden shrink-0 border border-slate-200 bg-slate-100 flex items-center justify-center">
+                  <div className="w-10 h-10 rounded-full overflow-hidden shrink-0 border border-slate-200/80 bg-slate-100 flex items-center justify-center">
                     {c.driver_avatar_url ? (
                       <img
                         src={c.driver_avatar_url}
@@ -186,25 +199,23 @@ export const RecentContributorsPaginated: React.FC<RecentContributorsPaginatedPr
                       {c.driver_name}
                     </div>
                     <div className="text-slate-500 text-[11px] flex items-center gap-2 mt-0.5">
-                      <span>Dat travay: {formatDateCreole(c.work_date)}</span>
+                      <span className="flex items-center gap-1">
+                        <Calendar className="w-3 h-3 text-slate-400" />
+                        Dat travay: <strong className="text-slate-700">{formatDateCreole(c.work_date)}</strong>
+                      </span>
                       {c.payment_method && (
-                        <span className="text-slate-400">• {c.payment_method}</span>
+                        <span className="text-slate-400 hidden sm:inline">• {c.payment_method}</span>
                       )}
                     </div>
-                    {c.approval_date && (
-                      <div className="text-[10px] text-slate-400 mt-0.5">
-                        Apwouve: {formatDateCreole(c.approval_date, 'long')}
-                      </div>
-                    )}
                   </div>
                 </div>
 
-                {/* Amount & Status Badge */}
-                <div className="text-right shrink-0">
-                  <div className="text-sm sm:text-base font-black font-mono text-emerald-700">
+                {/* Amount & Green Approved Status */}
+                <div className="text-right shrink-0 space-y-1">
+                  <div className="text-sm sm:text-base font-black font-mono text-emerald-700 tracking-tight">
                     +{formatBRL(c.amount_centavos)}
                   </div>
-                  <div className="mt-1">
+                  <div>
                     <StatusBadge status="APPROVED" />
                   </div>
                 </div>
@@ -214,46 +225,30 @@ export const RecentContributorsPaginated: React.FC<RecentContributorsPaginatedPr
         </div>
       )}
 
-      {/* Pagination Bar */}
-      {totalPages > 1 && (
-        <div className="p-4 sm:p-5 bg-slate-50/50 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
-          {/* Current Page Status */}
-          <div className="text-slate-500 font-medium text-center sm:text-left">
-            Montre paj <strong className="text-slate-900 font-bold">{page}</strong> sou{' '}
-            <strong className="text-slate-900 font-bold">{totalPages}</strong> ({totalCount} kontribisyon)
-          </div>
-
-          {/* Navigation Buttons: Anvan & Apre */}
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => handlePageChange(page - 1)}
-              disabled={page <= 1 || loading}
-              aria-label="Paj anvan"
-              className="inline-flex items-center gap-1 px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed font-semibold text-slate-700 transition"
-            >
-              <ChevronLeft className="w-4 h-4" />
-              Anvan
-            </button>
-
-            {/* Page Pill Indicators */}
-            <span className="px-3 py-2 rounded-xl bg-slate-100 font-mono font-bold text-slate-800">
-              {page} / {totalPages}
-            </span>
-
-            <button
-              type="button"
-              onClick={() => handlePageChange(page + 1)}
-              disabled={page >= totalPages || loading}
-              aria-label="Paj apre"
-              className="inline-flex items-center gap-1 px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed font-semibold text-slate-700 transition"
-            >
-              Apre
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
+      {/* "Gade plis" Button for Pagination */}
+      {!loading && !errorMsg && hasMore && (
+        <div className="p-4 sm:p-5 bg-slate-50/60 border-t border-slate-100 flex items-center justify-center">
+          <button
+            type="button"
+            onClick={handleLoadMore}
+            disabled={loadingMore}
+            className="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50 font-bold text-xs text-slate-800 shadow-xs transition"
+          >
+            {loadingMore ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-600" />
+                Chajman...
+              </>
+            ) : (
+              <>
+                <Plus className="w-3.5 h-3.5 text-emerald-600" />
+                Gade plis ({totalCount - contributors.length} ki rete)
+              </>
+            )}
+          </button>
         </div>
       )}
     </section>
   );
 };
+

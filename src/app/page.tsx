@@ -54,7 +54,7 @@ export default function HomePage() {
           <div className="bg-white rounded-3xl p-6 border border-slate-100 animate-pulse h-48" />
         }
       >
-        <RecentContributorsPaginated pageSize={10} />
+        <RecentContributorsPaginated pageSize={5} />
       </Suspense>
     </div>
   );

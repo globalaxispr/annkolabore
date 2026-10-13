@@ -507,7 +507,7 @@ export const repository = {
 
   async getPaginatedPublicContributors(
     page: number = 1,
-    pageSize: number = 10
+    pageSize: number = 5
   ): Promise<PaginatedContributorsResult> {
     let supabase = isSupabaseConfigured() ? createClient() : null;
     if (!supabase) {
@@ -530,16 +530,16 @@ export const repository = {
       const from = (page - 1) * pageSize;
       const to = from + pageSize - 1;
 
+      // Query privacy-safe, publicly granted view public_approved_contributors
       const { data, count, error } = await supabase
-        .from('contribution_submissions')
-        .select('id, driver_id, amount_cents, work_date, payment_date, reviewed_at, profiles!driver_id(full_name, avatar_url)', { count: 'exact' })
-        .eq('status', 'approved')
-        .order('reviewed_at', { ascending: false })
+        .from('public_approved_contributors')
+        .select('*', { count: 'exact' })
+        .order('approval_date', { ascending: false })
         .range(from, to);
 
       if (error) {
-        console.error('Erè lekti kontribitè yo nan Supabase:', error);
-        return { data: [], totalCount: 0, page, pageSize, totalPages: 0 };
+        console.error('Erè lekti kontribitè yo nan Supabase public_approved_contributors:', error);
+        throw new Error(error.message || 'Erè pandan lekti kontribisyon piblik yo.');
       }
 
       const totalCount = count || 0;
@@ -548,15 +548,15 @@ export const repository = {
       const mapped: PublicApprovedContributor[] = (data || []).map((row: any) => ({
         id: row.id,
         driver_id: row.driver_id,
-        driver_name: row.profiles?.full_name || 'Chofè',
-        driver_avatar_url: row.profiles?.avatar_url,
-        amount_cents: row.amount_cents,
-        amount_centavos: row.amount_cents,
+        driver_name: row.driver_name || row.profiles?.full_name || 'Chofè',
+        driver_avatar_url: row.driver_avatar_url || row.profiles?.avatar_url,
+        amount_cents: Number(row.amount_cents ?? row.amount_centavos ?? 0),
+        amount_centavos: Number(row.amount_centavos ?? row.amount_cents ?? 0),
         work_date: row.work_date,
         payment_date: row.payment_date,
-        approval_date: row.reviewed_at || row.payment_date,
+        approval_date: row.approval_date || row.reviewed_at || row.payment_date,
         payment_method: row.payment_method || 'PIX',
-        status: 'approved',
+        status: 'Apwouve',
       }));
 
       return {
@@ -566,9 +566,9 @@ export const repository = {
         pageSize,
         totalPages,
       };
-    } catch (err) {
+    } catch (err: any) {
       console.error('Erè getPaginatedPublicContributors:', err);
-      return { data: [], totalCount: 0, page, pageSize, totalPages: 0 };
+      throw err;
     }
   },
 
@@ -660,22 +660,21 @@ export const repository = {
 
     try {
       const { data, error } = await supabase
-        .from('contribution_submissions')
-        .select('*, profiles!driver_id(full_name, avatar_url)')
-        .eq('status', 'approved')
-        .order('reviewed_at', { ascending: false });
+        .from('public_approved_contributors')
+        .select('*')
+        .order('approval_date', { ascending: false });
 
       if (error || !data) return [];
 
       return data.map((sub: any) => ({
         id: sub.id,
-        driver_name: sub.profiles?.full_name || 'Chofè',
-        amount_centavos: sub.amount_cents,
+        driver_name: sub.driver_name || 'Chofè',
+        amount_centavos: Number(sub.amount_centavos ?? sub.amount_cents ?? 0),
         work_date: sub.work_date,
         payment_date: sub.payment_date,
-        approval_date: sub.reviewed_at || sub.created_at,
+        approval_date: sub.approval_date,
         status: 'Apwouve',
-        driver_avatar_url: sub.profiles?.avatar_url,
+        driver_avatar_url: sub.driver_avatar_url,
       }));
     } catch {
       return [];
