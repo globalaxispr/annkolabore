@@ -176,7 +176,7 @@ npm run build
    - `NEXT_PUBLIC_SUPABASE_URL`
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
    - `SUPABASE_SERVICE_ROLE_KEY` (Opsyonèl pou script administratif sèvè)
-   - `NEXT_PUBLIC_SITE_URL` (Mete domèn Vercel pwodiksyon an, egzanp: `https://chofe-legliz.vercel.app`)
+   - `NEXT_PUBLIC_SITE_URL` (Mete domèn Vercel pwodiksyon an, egzanp: `https://your-project.vercel.app`)
 3. Klike **Deploy**.
 4. Ajoute domèn pwodiksyon Vercel la nan lis **Redirect URLs** nan Supabase Dashboard (gade Seksyon 6).
 

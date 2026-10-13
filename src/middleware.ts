@@ -1,6 +1,6 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
-import { normalizeSupabaseUrl } from './lib/supabase/config';
+import { getSupabaseConfig } from './lib/supabase/config';
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({
@@ -9,11 +9,9 @@ export async function middleware(request: NextRequest) {
     },
   });
 
-  const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-  const url = normalizeSupabaseUrl(rawUrl);
+  const { url, anonKey, isConfigured } = getSupabaseConfig();
 
-  if (!url || !anonKey || url.includes('example.supabase.co')) {
+  if (!isConfigured) {
     return response;
   }
 
