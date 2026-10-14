@@ -14,7 +14,6 @@ import {
 import {
   calculateFinancialSummary,
   calculateGlobalContributionSummary,
-  findDuplicateWorkDateSubmission,
   validateContributionAmount,
   OPENING_BALANCE_CENTAVOS,
 } from './financial';
@@ -568,10 +567,19 @@ class DemoStorage {
     const val = validateContributionAmount(data.amount_centavos);
     if (!val.valid) return { submission: null, error: val.error };
 
-    if (findDuplicateWorkDateSubmission(this.submissions, data.driver_id, data.work_date)) {
+    // Accidental double-click protection: if the exact same submission was submitted within 1.5 seconds
+    const recentDuplicate = this.submissions.find(
+      (s) =>
+        s.driver_id === data.driver_id &&
+        s.work_date === data.work_date &&
+        s.amount_centavos === data.amount_centavos &&
+        s.payment_method === data.payment_method &&
+        Date.now() - new Date(s.created_at).getTime() < 1500
+    );
+    if (recentDuplicate) {
       return {
         submission: null,
-        error: `Ou te deja soumèt yon kontribisyon pou dat travay sa a (${data.work_date}). Si gen yon erè, kontakte trezorye a.`,
+        error: 'Yon soumisyon idantik fèk fèt. Si ou vle fè yon lòt kontribisyon, tanpri tann 2 segond (pwoteksyon kont doub klik).',
       };
     }
 
@@ -696,12 +704,7 @@ class DemoStorage {
     const driver = this.profiles.find((p) => p.id === data.driver_id);
     if (!driver) return { submission: null, error: 'Chofè a pa jwenn.' };
 
-    if (findDuplicateWorkDateSubmission(this.submissions, data.driver_id, data.work_date)) {
-      return {
-        submission: null,
-        error: `Chofè sa a deja gen yon kontribisyon pou dat travay ${data.work_date}.`,
-      };
-    }
+
 
     const now = new Date().toISOString();
     const newSub: ContributionSubmission = {

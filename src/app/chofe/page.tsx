@@ -16,6 +16,7 @@ import {
   Calendar,
   FileText,
   ArrowDownLeft,
+  Info,
 } from 'lucide-react';
 
 export default function DriverDashboardPage() {
@@ -88,7 +89,7 @@ export default function DriverDashboardPage() {
             {formatBRL(totalContributedCentavos)}
           </div>
           <p className="text-[11px] text-slate-400">
-            {approvedSubs.length} jou travay apwouve
+            {approvedSubs.length} kontribisyon apwouve
           </p>
         </div>
 
@@ -117,6 +118,14 @@ export default function DriverDashboardPage() {
             {latestApproved ? formatDateCreole(latestApproved.work_date) : 'Poko genyen'}
           </p>
         </div>
+      </div>
+
+      {/* Unlimited contributions explanation */}
+      <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 flex items-start gap-3">
+        <Info className="w-4 h-4 text-slate-500 shrink-0 mt-0.5" />
+        <p className="text-xs text-slate-600 leading-relaxed">
+          Ou ka fè kontribisyon nenpòt kantite fwa ou vle, menm nan menm jou a. Pa gen limit sou kantite kontribisyon ou ka fè, epi ou ka bay nenpòt montan pozitif selon kapasite ou.
+        </p>
       </div>
 
       {/* Compact Activity Feed */}

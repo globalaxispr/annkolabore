@@ -24,6 +24,10 @@ const isTestEnvironment = process.env.NODE_ENV === 'test';
 /** Cached user session in browser memory for sync components */
 let cachedUser: UserProfile | null = null;
 
+/** In-flight and rapid duplicate tracking to protect against double clicks / network duplicates */
+const inFlightSubmissions = new Set<string>();
+const recentSubmissionsMap = new Map<string, number>();
+
 /**
  * Data access layer. Connects directly to real Supabase PostgreSQL and Supabase Auth.
  * Demo mode and hardcoded fallback records are strictly disabled in production.
@@ -901,34 +905,38 @@ export const repository = {
       return { error: 'Sistèm nan pa konekte ak Supabase.' };
     }
 
+    let driverId = data.driver_id;
+    if (!driverId) {
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        driverId = user?.id;
+      } catch {
+        return { error: 'Erè pandan verifikasyon itilizatè a.' };
+      }
+    }
+
+    if (!driverId) {
+      return { error: 'Ou dwe konekte pou w ka soumèt yon kontribisyon.' };
+    }
+
+    const fingerprint = `${driverId}:${data.work_date}:${amount}:${data.payment_method}`;
+    if (inFlightSubmissions.has(fingerprint)) {
+      return { error: 'Soumisyon sa a deja nan kouran, tanpri tann yon ti moman.' };
+    }
+    const lastSubTime = recentSubmissionsMap.get(fingerprint);
+    if (lastSubTime && Date.now() - lastSubTime < 1500) {
+      return {
+        error:
+          'Yon soumisyon idantik fèk fèt. Si ou vle fè yon lòt kontribisyon, tanpri tann 2 segond (pwoteksyon kont doub klik).',
+      };
+    }
+    inFlightSubmissions.add(fingerprint);
+
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      const driverId = data.driver_id || user?.id;
-      if (!driverId) {
-        return { error: 'Ou dwe konekte pou w ka soumèt yon kontribisyon.' };
-      }
-
-      // Check duplicate work_date (rejected submissions may be re-submitted)
-      const { data: existing } = await supabase
-        .from('contribution_submissions')
-        .select('id, status')
-        .eq('driver_id', driverId)
-        .eq('work_date', data.work_date)
-        .neq('status', 'rejected')
-        .limit(1)
-        .maybeSingle();
-
-      if (existing) {
-        if (existing.status === 'approved') {
-          return { error: 'Ou te deja soumèt yon kontribisyon pou jou sa a epi li te apwouve.' };
-        }
-        if (existing.status === 'pending') {
-          return { error: 'Ou gen yon kontribisyon ki deja an atant pou jou travay sa a.' };
-        }
-      }
+      // Multiple contributions per day are explicitly permitted.
+      // Every submission enters the pending approval queue with its own unique database ID.
 
       // Only columns that exist in public.contribution_submissions are sent.
       // The receipt is OPTIONAL: receipt_path is included only when a real path exists.
@@ -952,7 +960,10 @@ export const repository = {
 
       if (insertError) {
         if (insertError.code === '23505') {
-          return { error: 'Ou gen yon kontribisyon ki deja egziste pou jou travay sa a.' };
+          return {
+            error:
+              'Baz done a rapòte yon kontrent inik (SQL 23505). Tanpri asire w migrasyon 20261014000000_allow_unlimited_contributions_per_day.sql aplike nan Supabase SQL Editor.',
+          };
         }
         return { error: 'Erè pandan anrejistreman kontribisyon an: ' + insertError.message };
       }
@@ -960,6 +971,9 @@ export const repository = {
       return { submission: inserted as ContributionSubmission };
     } catch (err: any) {
       return { error: err.message || 'Erè pandan soumèt kontribisyon an.' };
+    } finally {
+      inFlightSubmissions.delete(fingerprint);
+      recentSubmissionsMap.set(fingerprint, Date.now());
     }
   },
 
@@ -1026,7 +1040,10 @@ export const repository = {
           };
         }
         if (rpcError.code === '23505') {
-          return { error: 'Gen yon kontribisyon ki deja egziste pou chofè sa a nan dat travay sa a.' };
+          return {
+            error:
+              'Baz done a rapòte yon kontrent inik (SQL 23505). Tanpri asire w migrasyon 20261014000000_allow_unlimited_contributions_per_day.sql aplike nan Supabase SQL Editor.',
+          };
         }
         return { error: 'Erè pandan anrejistreman dirèk la: ' + rpcError.message };
       }
@@ -1293,5 +1310,10 @@ export const repository = {
       console.error('Erè createSignedReceiptUrl:', err);
       return null;
     }
+  },
+
+  _clearRecentSubmissions() {
+    inFlightSubmissions.clear();
+    recentSubmissionsMap.clear();
   },
 };

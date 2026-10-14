@@ -44,6 +44,7 @@ export default function SubmitContributionPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting) return;
     setErrorMsg(null);
     setSuccessMsg(null);
 
@@ -123,7 +124,7 @@ export default function SubmitContributionPage() {
         <div className="bg-slate-50 border border-slate-200/70 rounded-2xl p-4 mb-6 flex items-start gap-3">
           <Info className="w-4 h-4 text-slate-500 shrink-0 mt-0.5" />
           <div className="text-xs text-slate-600 leading-relaxed">
-            <strong>Règ Gwoup la:</strong> Chak chofè lib pou kontribye nenpòt montan li vle, selon kapasite li. Pa gen montan minimòm obligatwa. Si ou pa t travay nan yon jou, ou pa gen okenn obligasyon oswa dèt.
+            <strong>Règ Gwoup la:</strong> Ou ka fè kontribisyon nenpòt kantite fwa ou vle, menm nan menm jou a. Pa gen limit sou kantite kontribisyon ou ka fè, epi ou ka bay nenpòt montan pozitif selon kapasite ou.
           </div>
         </div>
 
@@ -137,9 +138,19 @@ export default function SubmitContributionPage() {
         {successMsg && (
           <div className="mb-6 p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs flex items-start gap-3">
             <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-            <div className="space-y-2">
+            <div className="space-y-3">
               <p>{successMsg}</p>
-              <div className="flex gap-3">
+              <div className="flex flex-wrap items-center gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSuccessMsg(null);
+                    setErrorMsg(null);
+                  }}
+                  className="inline-flex items-center gap-1.5 font-bold text-emerald-900 bg-white border border-emerald-200 hover:bg-emerald-100/70 px-3 py-1.5 rounded-xl text-xs transition shadow-2xs"
+                >
+                  + Fè Yon Lòt Kontribisyon Touswit
+                </button>
                 <Link
                   href="/chofe"
                   className="font-bold text-emerald-700 underline text-xs"

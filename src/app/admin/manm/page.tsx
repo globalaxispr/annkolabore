@@ -207,7 +207,7 @@ export default function MembersAdminPage() {
                   Anrejistre Kontribisyon Dirèk
                 </h3>
                 <p className="text-xs text-slate-500">
-                  Pou chofè: <strong>{directModalDriver.full_name}</strong>
+                  Pou chofè: <strong>{directModalDriver.full_name}</strong> • Ou ka anrejistre plizyè kontribisyon nan menm jou a
                 </p>
               </div>
               <button
@@ -302,7 +302,7 @@ export default function MembersAdminPage() {
                   type="submit"
                   className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 font-bold text-white shadow-xs"
                 >
-                  Anrejistre & Apwouve
+                  Anrejistre Kontribisyon (An Atant)
                 </button>
               </div>
             </form>

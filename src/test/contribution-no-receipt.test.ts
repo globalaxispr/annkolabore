@@ -43,6 +43,7 @@ describe('Contribution submission without receipt', () => {
     insertSpy.mockClear();
     rpcSpy.mockReset();
     existingRow = null;
+    repository._clearRecentSubmissions();
   });
 
   it('driver submits without receipt: no receipt_storage_path / receipt_path in INSERT', async () => {
@@ -93,15 +94,16 @@ describe('Contribution submission without receipt', () => {
     expect(insertSpy).not.toHaveBeenCalled();
   });
 
-  it('blocks duplicate pending submission for the same work date', async () => {
+  it('allows multiple submissions for the same work date (unlimited contributions per day)', async () => {
     existingRow = { id: 'x', status: 'pending' };
     const res = await repository.submitContribution({
       work_date: '2026-10-13',
       amount_centavos: 1000,
       payment_method: 'PIX',
     });
-    expect(res.error).toBeTruthy();
-    expect(insertSpy).not.toHaveBeenCalled();
+    expect(res.error).toBeUndefined();
+    expect(insertSpy).toHaveBeenCalledTimes(1);
+    expect(res.submission?.id).toBe('new-sub');
   });
 
   it('admin registers contribution via atomic RPC with no receipt and no direct inserts', async () => {
