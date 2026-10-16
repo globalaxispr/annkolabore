@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { repository } from '@/lib/repository';
 import { UserProfile, PaymentMethod } from '@/lib/types';
 import { MINIMUM_CONTRIBUTION_CENTAVOS } from '@/lib/financial';
-import { formatBRL } from '@/lib/formatters';
+import { formatBRL, formatDateCreole } from '@/lib/formatters';
 import {
   Calendar,
   CreditCard,
@@ -49,7 +49,7 @@ export default function SubmitContributionPage() {
     setSuccessMsg(null);
 
     if (!currentUser) {
-      setErrorMsg('Tanpri chwazi yon kont chofè anvan ou soumèt.');
+      setErrorMsg('Tanpri konekte sou kont ou anvan ou soumèt yon kontribisyon.');
       return;
     }
 
@@ -83,7 +83,7 @@ export default function SubmitContributionPage() {
         setErrorMsg(result.error);
       } else {
         setSuccessMsg(
-          `Kontribisyon ${formatBRL(amountCentavos)} pou jou travay ${workDate} soumèt avèk siksè! L ap parèt nan eta "An Atant" jiskaske trezorye a verifye li.`
+          `Kontribisyon ou an anrejistre (${formatBRL(amountCentavos)} pou jou travay ${formatDateCreole(workDate)}). L ap parèt nan total kontribisyon ou ki apwouve yo apre responsab fon an fin valide li.`
         );
         // Reset form
         setTransactionRef('');
@@ -122,9 +122,9 @@ export default function SubmitContributionPage() {
 
         {/* Minimal rule banner */}
         <div className="bg-slate-50 border border-slate-200/70 rounded-2xl p-4 mb-6 flex items-start gap-3">
-          <Info className="w-4 h-4 text-slate-500 shrink-0 mt-0.5" />
-          <div className="text-xs text-slate-600 leading-relaxed">
-            <strong>Règ Gwoup la:</strong> Ou ka fè kontribisyon nenpòt kantite fwa ou vle, menm nan menm jou a. Pa gen limit sou kantite kontribisyon ou ka fè, epi ou ka bay nenpòt montan pozitif selon kapasite ou.
+          <Info className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+          <div className="text-xs text-slate-700 leading-relaxed">
+            <strong className="text-slate-900 font-bold">Règ Kontribisyon an:</strong> Ou lib pou kontribye nenpòt montan ou kapab. Ou ka fè plizyè kontribisyon nan menm jou a. Pa gen montan minimòm ni limit sou kantite fwa ou ka kontribye. Si ou pa travay yon jou, ou pa gen okenn obligasyon ni dèt.
           </div>
         </div>
 

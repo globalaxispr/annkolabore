@@ -11,9 +11,9 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: 'Sistèm Jesyon Kontribisyon Chofè Legliz',
-  description: 'Platfòm transparans finansye pou gwoup chofè legliz nan Brezil. Kontribisyon lib san montan minimòm obligatwa pou chak jou travay.',
-  keywords: ['kontribisyon chofè', 'legliz', 'Brezil', 'transparans finansye', 'Kreyòl Ayisyen'],
+  title: 'Chofè Legliz — Fon Kontribisyon Kominotè',
+  description: 'Ansanm, n ap soutni kominote nou an. Platfòm transparans finansye pou kontribisyon lib kominote legliz la nan Brezil.',
+  keywords: ['Chofè Legliz', 'kontribisyon', 'kominote', 'Brezil', 'transparans finansye', 'Kreyòl Ayisyen'],
 };
 
 export default function RootLayout({

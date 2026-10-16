@@ -484,7 +484,7 @@ class DemoStorage {
    */
   public getPaginatedPublicContributors(
     page: number = 1,
-    pageSize: number = 10
+    pageSize: number = 6
   ): PaginatedContributorsResult {
     const approvedList: PublicApprovedContributor[] = this.submissions
       .filter((s) => s.status === 'APPROVED' || s.status === 'approved')

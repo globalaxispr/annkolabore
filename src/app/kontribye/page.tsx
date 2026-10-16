@@ -199,7 +199,7 @@ export default function KontribyePage() {
               {successReference}
             </span>
             <span className="text-[11px] text-amber-700 font-medium block pt-1">
-              • Eta: An Atant Verifikasyon
+              • Eta: Annatant verifikasyon
             </span>
           </div>
 
@@ -232,7 +232,7 @@ export default function KontribyePage() {
           <span>Donasyon Piblik PIX</span>
         </div>
         <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
-          Kontribiye Kounye a
+          Kontribye pou soutni kominote a
         </h1>
         <p className="text-slate-600 text-sm sm:text-base max-w-xl mx-auto font-normal">
           Sipòte kominote Chofè Legliz la. Nenpòt moun ka fè yon donasyon dirèk atravè PIX epi voye

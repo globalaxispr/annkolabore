@@ -75,7 +75,7 @@ export function isNavItemActive(pathname: string, item: NavItem): boolean {
 
 /** Pages that exist but are not sidebar entries. */
 const EXTRA_TITLES: Record<string, { title: string; parent?: string }> = {
-  '/kontribye': { title: 'Kontribiye Kounye a' },
+  '/kontribye': { title: 'Kontribye pou soutni kominote a' },
   '/chofe/soumet': { title: 'Soumèt Kontribisyon', parent: 'Kont Mwen' },
   '/auth/login': { title: 'Konekte' },
   '/auth/register': { title: 'Kreye Kont' },

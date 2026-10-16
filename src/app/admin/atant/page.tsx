@@ -72,7 +72,7 @@ export default function PendingApprovalsPage() {
       setActionError(result.error || 'Erè pandan apwobasyon an.');
     } else {
       setActionSuccess(
-        `Kontribisyon ${formatBRL(approveConfirmItem.amount_centavos)} pou ${approveConfirmItem.driver_name} apwouve avèk siksè!`
+        `Kontribisyon an apwouve avèk siksè. (${formatBRL(approveConfirmItem.amount_centavos)} pou ${approveConfirmItem.driver_name})`
       );
       setApproveConfirmItem(null);
       await loadPending();

@@ -511,7 +511,7 @@ export const repository = {
 
   async getPaginatedPublicContributors(
     page: number = 1,
-    pageSize: number = 5
+    pageSize: number = 6
   ): Promise<PaginatedContributorsResult> {
     let supabase = isSupabaseConfigured() ? createClient() : null;
     if (!supabase) {
@@ -534,11 +534,12 @@ export const repository = {
       const from = (page - 1) * pageSize;
       const to = from + pageSize - 1;
 
-      // Query privacy-safe, publicly granted view public_approved_contributors
+      // Query privacy-safe, publicly granted view public_approved_contributors with stable ordering
       const { data, count, error } = await supabase
         .from('public_approved_contributors')
         .select('*', { count: 'exact' })
-        .order('approval_date', { ascending: false })
+        .order('approval_date', { ascending: false, nullsFirst: false })
+        .order('id', { ascending: false })
         .range(from, to);
 
       if (error) {
@@ -702,7 +703,13 @@ export const repository = {
         .order('created_at', { ascending: false });
 
       if (error || !data) return [];
-      return data as ContributionSubmission[];
+      return (data || []).map((sub: any) => ({
+        ...sub,
+        driver_name: sub.driver_name || 'Chofè',
+        amount_centavos: Number(sub.amount_cents ?? sub.amount_centavos ?? 0),
+        amount_cents: Number(sub.amount_cents ?? sub.amount_centavos ?? 0),
+        status: (sub.status || 'pending').toUpperCase(),
+      })) as ContributionSubmission[];
     } catch {
       return [];
     }
@@ -710,6 +717,43 @@ export const repository = {
 
   async getDriverSubmissions(driverId: string): Promise<ContributionSubmission[]> {
     return this.getSubmissionsForDriver(driverId);
+  },
+
+  /**
+   * Subscribe to real-time changes on contribution_submissions table for a specific driver
+   * so the member dashboard updates immediately upon admin approval.
+   */
+  subscribeToDriverSubmissions(
+    driverId: string,
+    callback: () => void
+  ): () => void {
+    const supabase = isSupabaseConfigured() ? createClient() : null;
+    if (!supabase) return () => {};
+
+    try {
+      const channel = supabase
+        .channel(`driver_subs_${driverId}_realtime`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'contribution_submissions',
+            filter: `driver_id=eq.${driverId}`,
+          },
+          () => {
+            callback();
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    } catch (err) {
+      console.error('Erè subscribeToDriverSubmissions:', err);
+      return () => {};
+    }
   },
 
   async getAllPendingSubmissions(): Promise<ContributionSubmission[]> {

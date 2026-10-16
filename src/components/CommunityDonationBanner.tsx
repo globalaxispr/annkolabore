@@ -51,7 +51,7 @@ export const CommunityDonationBanner: React.FC = () => {
             href="/kontribye"
             className="inline-flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-bold text-sm sm:text-base shadow-lg shadow-emerald-950/50 hover:shadow-emerald-500/20 transition-all active:scale-[0.98]"
           >
-            <span>Kontribiye Kounye a</span>
+            <span>Kontribye pou soutni kominote a</span>
             <ArrowRight className="w-4 h-4 text-slate-950" />
           </Link>
 

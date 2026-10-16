@@ -10,10 +10,11 @@ import {
   ShieldCheck,
   Clock,
   Calendar,
-  Loader2,
+  ChevronLeft,
+  ChevronRight,
   RefreshCw,
   AlertCircle,
-  Plus,
+  User,
 } from 'lucide-react';
 
 interface RecentContributorsPaginatedProps {
@@ -21,75 +22,83 @@ interface RecentContributorsPaginatedProps {
 }
 
 export const RecentContributorsPaginated: React.FC<RecentContributorsPaginatedProps> = ({
-  pageSize = 5,
+  pageSize = 6,
 }) => {
   const [contributors, setContributors] = useState<PublicApprovedContributor[]>([]);
   const [page, setPage] = useState<number>(1);
   const [totalCount, setTotalCount] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(true);
-  const [loadingMore, setLoadingMore] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const loadInitialData = useCallback(async () => {
-    setLoading(true);
-    setErrorMsg(null);
-    try {
-      const res = await repository.getPaginatedPublicContributors(1, pageSize);
-      setContributors(res.data);
-      setTotalCount(res.totalCount);
-      setPage(1);
-    } catch (err: any) {
-      console.error('Erè pandan rekiperasyon kontribisyon yo:', err);
-      setErrorMsg(
-        err?.message ||
-          'Pa ka jwenn lis kontribisyon yo kounye a. Tanpri verifye koneksyon an.'
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [pageSize]);
-
-  const handleLoadMore = async () => {
-    if (loadingMore || contributors.length >= totalCount) return;
-
-    setLoadingMore(true);
-    try {
-      const nextPage = page + 1;
-      const res = await repository.getPaginatedPublicContributors(nextPage, pageSize);
-
-      setContributors((prev) => {
-        const existingIds = new Set(prev.map((c) => c.id));
-        const newUnique = res.data.filter((c) => !existingIds.has(c.id));
-        return [...prev, ...newUnique];
-      });
-      setPage(nextPage);
-      setTotalCount(res.totalCount);
-    } catch (err: any) {
-      console.error('Erè pandan chajman lòt kontribisyon yo:', err);
-    } finally {
-      setLoadingMore(false);
-    }
-  };
+  const fetchPage = useCallback(
+    async (targetPage: number) => {
+      setLoading(true);
+      setErrorMsg(null);
+      try {
+        const res = await repository.getPaginatedPublicContributors(targetPage, pageSize);
+        setContributors(res.data);
+        setTotalCount(res.totalCount);
+        setPage(targetPage);
+      } catch (err: unknown) {
+        console.error('Erè pandan rekiperasyon kontribisyon yo:', err);
+        const msg = (err as Error)?.message || 'Pa ka jwenn lis kontribisyon yo kounye a. Tanpri verifye koneksyon an.';
+        setErrorMsg(msg);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [pageSize]
+  );
 
   useEffect(() => {
-    loadInitialData();
+    fetchPage(page);
 
     // Auto-refresh when an administrator approves a contribution in real time
     const unsubscribe = repository.subscribeToGlobalBalance(() => {
-      loadInitialData();
+      fetchPage(page);
     });
 
     return () => {
       unsubscribe();
     };
-  }, [loadInitialData]);
+  }, [fetchPage, page]);
 
-  const hasMore = contributors.length < totalCount;
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+
+  const handlePrevPage = () => {
+    if (page > 1 && !loading) {
+      fetchPage(page - 1);
+    }
+  };
+
+  const handleNextPage = () => {
+    if (page < totalPages && !loading) {
+      fetchPage(page + 1);
+    }
+  };
+
+  const handleGoToPage = (p: number) => {
+    if (p !== page && p >= 1 && p <= totalPages && !loading) {
+      fetchPage(p);
+    }
+  };
+
+  // Build page jump numbers (e.g. 1, 2, 3...)
+  const pageNumbers: number[] = [];
+  const maxButtons = 5;
+  let startPage = Math.max(1, page - Math.floor(maxButtons / 2));
+  const endPage = Math.min(totalPages, startPage + maxButtons - 1);
+  if (endPage - startPage + 1 < maxButtons) {
+    startPage = Math.max(1, endPage - maxButtons + 1);
+  }
+  for (let i = startPage; i <= endPage; i++) {
+    pageNumbers.push(i);
+  }
 
   return (
     <section
       role="region"
-      aria-label="Dènye Kontribisyon yo"
+      aria-label="Dènye kontribisyon ki apwouve yo"
       className="bg-white rounded-3xl border border-slate-100 shadow-xs overflow-hidden"
     >
       {/* Header */}
@@ -97,7 +106,7 @@ export const RecentContributorsPaginated: React.FC<RecentContributorsPaginatedPr
         <div>
           <div className="flex items-center gap-2">
             <h2 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">
-              Dènye Kontribisyon yo
+              Dènye kontribisyon ki apwouve yo
             </h2>
             {totalCount > 0 && (
               <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700">
@@ -105,32 +114,34 @@ export const RecentContributorsPaginated: React.FC<RecentContributorsPaginatedPr
               </span>
             )}
           </div>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Lis tout kontribisyon ofisyèl chofè yo ki valide epi apwouve pa trezorye a
+          <p className="text-xs text-slate-500 mt-0.5">
+            Men dènye kontribisyon responsab fon an verifye epi apwouve.
           </p>
         </div>
 
         <div className="flex items-center gap-2 self-start sm:self-auto">
           <button
-            onClick={loadInitialData}
+            type="button"
+            onClick={() => fetchPage(page)}
             disabled={loading}
             title="Rafrechi lis la"
+            aria-label="Rafrechi lis kontribisyon yo"
             className="p-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 disabled:opacity-40 transition shadow-xs"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-emerald-600' : ''}`} />
           </button>
           <div className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-100/60">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-            Transparans Piblik
+            Transparans pou tout kominote a
           </div>
         </div>
       </div>
 
       {/* Content / Rows */}
       {loading ? (
-        // Loading Skeleton
+        // Loading Skeleton with 6 items
         <div className="divide-y divide-slate-100 animate-pulse">
-          {Array.from({ length: 3 }).map((_, i) => (
+          {Array.from({ length: pageSize }).map((_, i) => (
             <div key={i} className="p-4 sm:p-5 flex items-center justify-between gap-4">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-slate-100" />
@@ -153,7 +164,8 @@ export const RecentContributorsPaginated: React.FC<RecentContributorsPaginatedPr
             <span>{errorMsg}</span>
           </div>
           <button
-            onClick={loadInitialData}
+            type="button"
+            onClick={() => fetchPage(page)}
             className="px-4 py-2 rounded-xl bg-rose-600 text-white text-xs font-bold hover:bg-rose-700 transition shadow-xs"
           >
             Eseye Ankò
@@ -163,10 +175,10 @@ export const RecentContributorsPaginated: React.FC<RecentContributorsPaginatedPr
         <div className="py-16 text-center text-slate-400 space-y-2">
           <Clock className="w-8 h-8 mx-auto text-slate-300" />
           <p className="text-sm font-semibold text-slate-700">
-            Poko gen kontribisyon ki anrejistre.
+            Poko gen kontribisyon ki apwouve.
           </p>
           <p className="text-xs text-slate-400">
-            Lè yon kontribisyon valide pa trezorye a, l ap parèt nan lis sa a otomatikman.
+            Lè responsab fon an fin valide yon kontribisyon, l ap parèt nan lis sa a otomatikman.
           </p>
         </div>
       ) : (
@@ -175,11 +187,11 @@ export const RecentContributorsPaginated: React.FC<RecentContributorsPaginatedPr
             return (
               <div
                 key={c.id}
-                className="p-4 sm:p-5 hover:bg-slate-50/50 transition flex items-center justify-between gap-3 text-xs bg-white"
+                className="p-4 sm:p-5 hover:bg-slate-50/60 transition flex items-center justify-between gap-3 text-xs bg-white"
               >
-                {/* Driver Photo & Name */}
+                {/* Contributor Photo & Name (Privacy-Safe Public Fields Only) */}
                 <div className="flex items-center gap-3.5 min-w-0">
-                  <div className="w-10 h-10 rounded-full overflow-hidden shrink-0 border border-slate-200/80 bg-slate-100 flex items-center justify-center">
+                  <div className="w-10 h-10 rounded-full overflow-hidden shrink-0 border border-slate-200/80 bg-slate-100 flex items-center justify-center text-slate-600">
                     {c.driver_avatar_url ? (
                       <img
                         src={c.driver_avatar_url}
@@ -187,10 +199,12 @@ export const RecentContributorsPaginated: React.FC<RecentContributorsPaginatedPr
                         className="w-full h-full object-cover"
                         loading="lazy"
                       />
-                    ) : (
-                      <span className="text-xs font-bold text-slate-600">
+                    ) : c.driver_name ? (
+                      <span className="text-xs font-bold text-slate-700">
                         {initialsOf(c.driver_name)}
                       </span>
+                    ) : (
+                      <User className="w-5 h-5 text-slate-400" />
                     )}
                   </div>
 
@@ -210,13 +224,13 @@ export const RecentContributorsPaginated: React.FC<RecentContributorsPaginatedPr
                   </div>
                 </div>
 
-                {/* Amount & Green Approved Status */}
+                {/* Amount & Approved Status */}
                 <div className="text-right shrink-0 space-y-1">
                   <div className="text-sm sm:text-base font-black font-mono text-emerald-700 tracking-tight">
                     +{formatBRL(c.amount_centavos)}
                   </div>
                   <div>
-                    <StatusBadge status="APPROVED" />
+                    <StatusBadge status="Apwouve" />
                   </div>
                 </div>
               </div>
@@ -225,30 +239,74 @@ export const RecentContributorsPaginated: React.FC<RecentContributorsPaginatedPr
         </div>
       )}
 
-      {/* "Gade plis" Button for Pagination */}
-      {!loading && !errorMsg && hasMore && (
-        <div className="p-4 sm:p-5 bg-slate-50/60 border-t border-slate-100 flex items-center justify-center">
-          <button
-            type="button"
-            onClick={handleLoadMore}
-            disabled={loadingMore}
-            className="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50 font-bold text-xs text-slate-800 shadow-xs transition"
-          >
-            {loadingMore ? (
-              <>
-                <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-600" />
-                Chajman...
-              </>
-            ) : (
-              <>
-                <Plus className="w-3.5 h-3.5 text-emerald-600" />
-                Gade plis ({totalCount - contributors.length} ki rete)
-              </>
+      {/* Accessible Pagination Bar: Anvan / Page Number / Apre */}
+      {!loading && !errorMsg && totalCount > 0 && (
+        <nav
+          aria-label="Pajinasyon kontribisyon yo"
+          className="p-4 sm:p-5 bg-slate-50/70 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs"
+        >
+          {/* Current Page and Total Indicator */}
+          <div className="text-slate-500 font-medium">
+            Afiche <strong className="text-slate-800">{contributors.length}</strong> sou{' '}
+            <strong className="text-slate-800">{totalCount}</strong> kontribisyon • Paj{' '}
+            <strong className="text-slate-800">{page}</strong> sou{' '}
+            <strong className="text-slate-800">{totalPages}</strong>
+          </div>
+
+          {/* Navigation Controls */}
+          <div className="flex items-center gap-1.5">
+            {/* Anvan Button */}
+            <button
+              type="button"
+              onClick={handlePrevPage}
+              disabled={page <= 1 || loading}
+              aria-label="Paj anvan"
+              className="inline-flex items-center gap-1 px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed font-bold text-slate-700 shadow-xs transition"
+            >
+              <ChevronLeft className="w-4 h-4" />
+              <span>Anvan</span>
+            </button>
+
+            {/* Numeric Page Buttons */}
+            {totalPages > 1 && (
+              <div className="hidden sm:flex items-center gap-1">
+                {pageNumbers.map((p) => {
+                  const isActive = p === page;
+                  return (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => handleGoToPage(p)}
+                      disabled={loading}
+                      aria-current={isActive ? 'page' : undefined}
+                      aria-label={`Ale nan paj ${p}`}
+                      className={`min-w-8 h-8 px-2.5 rounded-xl font-bold text-xs transition ${
+                        isActive
+                          ? 'bg-slate-900 text-white shadow-xs'
+                          : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  );
+                })}
+              </div>
             )}
-          </button>
-        </div>
+
+            {/* Apre Button */}
+            <button
+              type="button"
+              onClick={handleNextPage}
+              disabled={page >= totalPages || loading}
+              aria-label="Paj apre"
+              className="inline-flex items-center gap-1 px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed font-bold text-slate-700 shadow-xs transition"
+            >
+              <span>Apre</span>
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        </nav>
       )}
     </section>
   );
 };
-

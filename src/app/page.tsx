@@ -5,11 +5,25 @@ import Link from 'next/link';
 import { GlobalContributionBalance } from '@/components/GlobalContributionBalance';
 import { CommunityDonationBanner } from '@/components/CommunityDonationBanner';
 import { RecentContributorsPaginated } from '@/components/RecentContributorsPaginated';
-import { PlusCircle, Info, Car } from 'lucide-react';
+import { PlusCircle, Info, Car, ShieldCheck } from 'lucide-react';
 
 export default function HomePage() {
   return (
     <div className="space-y-6 max-w-4xl mx-auto pb-16 md:pb-6">
+      {/* Community Hero Header */}
+      <div className="bg-gradient-to-b from-slate-900 to-slate-950 text-white rounded-3xl p-6 sm:p-8 border border-slate-800 shadow-md">
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs font-semibold mb-3">
+          <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+          <span>Fon Kominote Chofè Legliz • Transparans Total</span>
+        </div>
+        <h1 className="text-2xl sm:text-3xl md:text-4xl font-black tracking-tight leading-tight">
+          Ansanm, n ap soutni kominote nou an.
+        </h1>
+        <p className="mt-2 text-xs sm:text-sm text-slate-300 leading-relaxed max-w-2xl">
+          Chak kontribisyon, piti kou gwo, ede nou avanse ansanm. Bay selon mwayen ou, epi suiv kijan kontribisyon yo ap anrejistre ak transparans.
+        </p>
+      </div>
+
       {/* 1. PRIMARY VISUAL ELEMENT: GLOBAL LIVE CONTRIBUTION BALANCE (Large Bank-Style Hero) */}
       <GlobalContributionBalance
         variant="hero"
@@ -38,22 +52,20 @@ export default function HomePage() {
       </div>
 
       {/* Minimal Fintech Rule Card in Haitian Creole */}
-      <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200/60 flex items-start gap-3 text-xs text-slate-600 leading-relaxed">
+      <div className="p-4 sm:p-5 rounded-2xl bg-slate-50/90 border border-slate-200/80 flex items-start gap-3 text-xs text-slate-700 leading-relaxed shadow-xs">
         <Info className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
         <div>
-          <strong className="text-slate-800">Règ Kontribisyon an:</strong> Chak chofè lib pou kontribye
-          nenpòt montan li vle, selon kapasite li. Pa gen montan minimòm obligatwa. Si yon chofè pa travay
-          nan yon jou, li pa gen okenn obligasyon oswa dèt.
+          <strong className="text-slate-900 font-bold">Règ Kontribisyon an:</strong> Ou lib pou kontribye nenpòt montan ou kapab. Ou ka fè plizyè kontribisyon nan menm jou a. Pa gen montan minimòm ni limit sou kantite fwa ou ka kontribye. Si ou pa travay yon jou, ou pa gen okenn obligasyon ni dèt.
         </div>
       </div>
 
-      {/* 7. RECENT CONTRIBUTORS WITH SERVER-SIDE PAGINATION */}
+      {/* 7. RECENT CONTRIBUTORS WITH SERVER-SIDE PAGINATION (6 records per page) */}
       <Suspense
         fallback={
           <div className="bg-white rounded-3xl p-6 border border-slate-100 animate-pulse h-48" />
         }
       >
-        <RecentContributorsPaginated pageSize={5} />
+        <RecentContributorsPaginated pageSize={6} />
       </Suspense>
     </div>
   );

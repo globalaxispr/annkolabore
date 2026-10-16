@@ -376,26 +376,26 @@ export default function ProfilePage() {
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 space-y-1">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                Total Apwouve
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                Total kontribisyon mwen ki apwouve
               </span>
               <div className="text-xl font-extrabold text-slate-900 font-mono">
                 {formatBRL(totalContributedCentavos)}
               </div>
-              <p className="text-[10px] text-slate-400">
-                {approvedSubs.length} jou travay konfime
+              <p className="text-[10px] text-emerald-700 font-medium">
+                {approvedSubs.length} kontribisyon apwouve ofisyèlman
               </p>
             </div>
 
             <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 space-y-1">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                An Atant
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                Kontribisyon k ap tann apwobasyon
               </span>
               <div className="text-xl font-extrabold text-amber-700 font-mono">
-                {pendingSubs.length}
+                {formatBRL(pendingSubs.reduce((sum, s) => sum + (s.amount_cents || s.amount_centavos || 0), 0))}
               </div>
-              <p className="text-[10px] text-slate-400">
-                {pendingSubs.length > 0 ? 'Ap tann trezorye' : 'Pa gen anyen an atant'}
+              <p className="text-[10px] text-slate-500">
+                {pendingSubs.length > 0 ? `${pendingSubs.length} k ap tann verifikasyon` : 'Pa gen okenn kontribisyon an atant'}
               </p>
             </div>
 

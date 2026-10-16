@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { repository } from '@/lib/repository';
 import { isSupabaseConfigured, createClient } from '@/lib/supabase/client';
+import { parseBRLInputToCentavos } from '@/lib/formatters';
 
 // 5 MB limit
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
@@ -92,16 +93,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Parse amount in BRL (handles comma or dot, e.g. "50", "50,00", "50.00")
-    const cleanedAmount = amountStr.replace(/\s/g, '').replace('R$', '').replace(/\./g, '').replace(',', '.');
-    const parsedAmount = parseFloat(cleanedAmount);
-    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+    // Parse amount in BRL (handles comma or dot with integer centavos precision)
+    const amountCents = parseBRLInputToCentavos(amountStr);
+    if (!amountCents || amountCents <= 0) {
       return NextResponse.json(
         { error: 'Montan donasyon an pa valab. Tanpri mete yon montan ki plis pase R$ 0,00.' },
         { status: 400 }
       );
     }
-    const amountCents = Math.round(parsedAmount * 100);
 
     if (!paymentDate || !/^\d{4}-\d{2}-\d{2}$/.test(paymentDate)) {
       return NextResponse.json(
